@@ -1,0 +1,288 @@
+/* ── Intake Form Styles ────────────────────────── */
+.intake-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+}
+
+@media (max-width: 768px) {
+  .intake-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.intake-narrative {
+  min-height: 240px;
+  flex: 1;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+/* ── Login Page Styles ────────────────────────── */
+.login-page-wrapper {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .login-page-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Left Panel - Healthcare Console Branding */
+.login-visual-panel {
+  background: linear-gradient(135deg, #073532 0%, #0d1217 100%);
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
+}
+
+@media (max-width: 1024px) {
+  .login-visual-panel {
+    display: none;
+  }
+}
+
+.login-visual-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 30% 20%, rgba(14, 94, 89, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(91, 87, 214, 0.15) 0%, transparent 40%),
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  animation: bg-pan 60s linear infinite;
+}
+
+@keyframes bg-pan {
+  0% { background-position: 0% 0%, 0% 0%, 0px 0px, 0px 0px; }
+  100% { background-position: 100% 100%, 100% 100%, 400px 400px, 400px 400px; }
+}
+
+.login-visual-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login-visual-header-logo {
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-visual-body {
+  position: relative;
+  z-index: 10;
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+
+.login-visual-tagline {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+  background: linear-gradient(120deg, #ffffff 40%, #8be8e2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-visual-desc {
+  font-size: var(--text-md);
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  max-width: 500px;
+  margin-bottom: 36px;
+}
+
+/* Simulated Diagnostic Console UI inside left panel */
+.simulated-panel {
+  background: rgba(20, 26, 33, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  max-width: 480px;
+  box-shadow: var(--shadow-xl);
+  animation: panel-float 6s ease-in-out infinite;
+}
+
+@keyframes panel-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.simulated-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.simulated-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--confirmed-green);
+  box-shadow: 0 0 8px var(--confirmed-green);
+}
+
+.simulated-pulse-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--teal-light), var(--indigo-light), transparent);
+  background-size: 200% 100%;
+  animation: pulse-slide 3s linear infinite;
+  margin: 12px 0;
+}
+
+@keyframes pulse-slide {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.compliance-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.compliance-badge {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+/* Right Panel - Form Layout */
+.login-form-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  position: relative;
+  z-index: 10;
+}
+
+.login-form-wrapper {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-form-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-xl);
+  padding: 32px;
+  box-shadow: var(--shadow-xl);
+  transition: all var(--transition-base);
+}
+
+.login-form-card:hover {
+  box-shadow: 0 20px 40px rgba(20, 26, 33, 0.08);
+}
+
+/* Form inputs with prefix icons */
+.input-icon-wrapper {
+  position: relative;
+}
+
+.input-icon-left {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-secondary);
+  pointer-events: none;
+}
+
+.input-with-icon {
+  padding-left: 36px !important;
+}
+
+.demo-credentials {
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: rgba(91, 87, 214, 0.05);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(91, 87, 214, 0.12);
+}
+
+/* Ambient Background Animations for Form Panel */
+.ambient-glow-1 {
+  position: absolute;
+  top: -10%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(14, 94, 89, 0.1) 0%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ambient-glow-2 {
+  position: absolute;
+  bottom: -10%;
+  left: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(91, 87, 214, 0.08) 0%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Form Animations ─────────────────────────── */
+@keyframes field-error-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.field-error-shake {
+  animation: field-error-shake 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-error-shake {
+    animation: none;
+  }
+  .login-visual-grid {
+    animation: none;
+  }
+  .simulated-panel {
+    animation: none;
+  }
+  .simulated-pulse-line {
+    animation: none;
+  }
+}
+
