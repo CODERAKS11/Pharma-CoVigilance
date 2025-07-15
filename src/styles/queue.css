@@ -1,0 +1,39 @@
+/* ── Queue-specific animations ─────────────────── */
+@keyframes row-highlight-in {
+  0% { background-color: var(--teal-muted); }
+  100% { background-color: transparent; }
+}
+
+.row-highlight-enter {
+  animation: row-highlight-in 2s ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-highlight-enter {
+    animation: none;
+  }
+}
+
+/* ── Detail panel responsive adjustments ──────── */
+@media (max-width: 1024px) {
+  .detail-panel {
+    width: 100vw;
+  }
+}
+
+/* ── Causality Dial responsive ────────────────── */
+.dial-container {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+/* ── Queue table dense mode ───────────────────── */
+.queue-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.queue-table-wrapper table {
+  min-width: 900px;
+}
