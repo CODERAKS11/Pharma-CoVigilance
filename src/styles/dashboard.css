@@ -1,0 +1,70 @@
+/* ── Dashboard Styles ──────────────────────────── */
+.stat-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 900px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Chart Skeleton ───────────────────────────── */
+.chart-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+}
+
+.chart-skeleton-bar {
+  height: 18px;
+  border-radius: var(--radius-sm);
+}
+
+.chart-skeleton-donut {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  margin: 20px auto;
+}
+
+/* ── Exports Batch Bar ────────────────────────── */
+.export-batch-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 20px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 -2px 8px rgba(20, 26, 33, 0.08);
+  z-index: 5;
+}
+
+/* ── Date Range Selector ─────────────────────── */
+.date-range-selector {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface-hover);
+  padding: 3px;
+  border-radius: var(--radius-md);
+}
+
+.date-range-selector .btn.active {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
