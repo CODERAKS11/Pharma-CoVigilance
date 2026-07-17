@@ -1,0 +1,22 @@
+{
+  "name": "@pharmasafe/db",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "seed": "ts-node scripts/seed-faers.ts",
+    "migrate:local": "ts-node scripts/run-migration.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.8",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/node-fetch": "^2.6.11",
+    "@types/pg": "^8.11.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
