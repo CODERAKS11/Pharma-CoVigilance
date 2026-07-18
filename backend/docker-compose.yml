@@ -30,6 +30,24 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  api:
+    build:
+      context: .
+      dockerfile: backend/apps/api/Dockerfile
+    container_name: pharmasafe-api
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pharmasafe
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+
 volumes:
   postgres_data:
   redis_data:

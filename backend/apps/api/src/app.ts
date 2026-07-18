@@ -1,15 +1,29 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { logger } from './config/logger';
 import authRouter from './routes/auth';
 import casesRouter from './routes/cases';
 import reviewRouter from './routes/review';
+import dashboardRouter from './routes/dashboard';
 
 const app = express();
 
-// Standard Middlewares
+// Security Middlewares
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// Apply rate limiting to all requests
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'test' ? 1000 : 100, // higher limit in test context
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
+});
+app.use(limiter);
 
 // Simple logging middleware for HTTP requests
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -36,6 +50,7 @@ app.get('/health', (req: Request, res: Response) => {
 app.use('/auth', authRouter);
 app.use('/cases', casesRouter);
 app.use('/cases', reviewRouter);
+app.use('/dashboard', dashboardRouter);
 
 // 404 Route handler
 app.use((req: Request, res: Response) => {
