@@ -11,10 +11,15 @@ async function run() {
   const client = new Client({ connectionString });
   try {
     await client.connect();
-    console.log('Connected to database, running migration...');
-    const migrationSql = fs.readFileSync(path.join(__dirname, '../migrations/001_init.sql'), 'utf8');
-    await client.query(migrationSql);
-    console.log('Migration successfully completed.');
+    console.log('Connected to database, running migrations...');
+    const migrationsDir = path.join(__dirname, '../migrations');
+    const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+    for (const file of files) {
+      console.log(`Executing migration: ${file}`);
+      const migrationSql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      await client.query(migrationSql);
+    }
+    console.log('All migrations successfully completed.');
   } catch (error) {
     console.error('Migration failed:', error);
     process.exit(1);

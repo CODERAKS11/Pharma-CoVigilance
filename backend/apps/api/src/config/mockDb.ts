@@ -46,6 +46,11 @@ export interface Case {
   status: 'intake' | 'processing' | 'triaged' | 'needs_review' | 'reviewed' | 'exported' | 'rejected';
   priority: 'low' | 'medium' | 'high' | 'critical' | null;
   source: 'faers_seed' | 'manual' | 'api';
+  naranjo_score?: number | null;
+  naranjo_category?: string | null;
+  naranjo_answers?: any[] | null;
+  snomed_candidates?: any[] | null;
+  ai_summary?: string | null;
   created_at: Date;
   updated_at: Date;
 }
