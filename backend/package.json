@@ -1,0 +1,15 @@
+{
+  "name": "pharmasafe-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build:api": "npm run build --workspace=apps/api",
+    "seed": "npm run seed --workspace=packages/db",
+    "test": "npm test --workspace=apps/api"
+  }
+}
