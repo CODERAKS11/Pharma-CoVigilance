@@ -49,6 +49,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
 
+    try {
+      const response = await fetch('http://localhost:4000/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+        localStorage.setItem('pharmasafe_user', JSON.stringify(data.user));
+        localStorage.setItem('pharmasafe_token', data.token);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('Real Auth Backend API unavailable, falling back to mock mode authentication.');
+    }
+
     // Simulate network delay
     await new Promise(r => setTimeout(r, 800));
 
@@ -62,12 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { password: _, ...userData } = mockUser;
     setUser(userData);
     localStorage.setItem('pharmasafe_user', JSON.stringify(userData));
+    localStorage.setItem('pharmasafe_token', 'mock-offline-token');
     setLoading(false);
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('pharmasafe_user');
+    localStorage.removeItem('pharmasafe_token');
   }, []);
 
   return (

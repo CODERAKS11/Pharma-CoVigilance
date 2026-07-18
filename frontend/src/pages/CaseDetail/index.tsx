@@ -19,7 +19,26 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
   const [overrideReason, setOverrideReason] = useState('');
   const [actionTaken, setActionTaken] = useState<string | null>(null);
 
-  const handleAction = (action: 'confirm' | 'override' | 'reject') => {
+  const handleAction = async (action: 'confirm' | 'override' | 'reject') => {
+    if (action === 'confirm' || action === 'override') {
+      const token = localStorage.getItem('pharmasafe_token');
+      try {
+        await fetch(`http://localhost:4000/cases/${caseData.id}/review/confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            seriousness: caseData.seriousness || [],
+            snomedCandidates: caseData.snomedCandidates || [],
+            naranjoAnswers: caseData.naranjoAnswers || []
+          })
+        });
+      } catch (err) {
+        console.warn('Real API review submission failed or offline, falling back to simulated confirm.');
+      }
+    }
     setActionTaken(action);
     setTimeout(() => setActionTaken(null), 3000);
     if (action !== 'override') setOverrideMode(false);

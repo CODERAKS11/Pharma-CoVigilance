@@ -127,4 +127,36 @@ describe('PharmaSafe Phase 4 - Review, Audit & Export Tests', () => {
       expect(res.text).toContain('<nationalprogramcode>');
     });
   });
+
+  describe('GET /cases/audit (System-wide Audit Logs)', () => {
+    it('should reject audit logs query from reporters (403)', async () => {
+      const res = await request(app)
+        .get('/cases/audit')
+        .set('Authorization', `Bearer ${REPORTER_JWT}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('should return recent system-wide audit events for reviewers (200)', async () => {
+      // Seed a case event
+      caseEventsTable.push({
+        id: 'evt-001',
+        case_id: caseId,
+        actor_type: 'system',
+        actor_id: null,
+        action: 'triage_prioritized',
+        detail: { priority: 'high' },
+        created_at: new Date()
+      });
+
+      const res = await request(app)
+        .get('/cases/audit')
+        .set('Authorization', `Bearer ${REVIEWER_JWT}`);
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].action).toBe('triage_prioritized');
+    });
+  });
 });

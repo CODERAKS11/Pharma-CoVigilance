@@ -26,9 +26,39 @@ export default function ExportsPage() {
     }
   };
 
-  const handleExport = (format: string, id?: string) => {
-    // Simulated download
-    alert(`Downloading ${format} export for ${id || `${selectedIds.size} cases`}`);
+  const handleExport = async (format: string, id?: string) => {
+    const token = localStorage.getItem('pharmasafe_token');
+    const idsToExport = id ? [id] : Array.from(selectedIds);
+    if (idsToExport.length === 0) return;
+
+    for (const caseId of idsToExport) {
+      try {
+        const endpointType = format.toLowerCase().includes('e2b') ? 'e2b' : 'pvpi';
+        const response = await fetch(`http://localhost:4000/cases/${caseId}/export/${endpointType}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `${endpointType}-${caseId.substring(0, 8)}.xml`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+          continue;
+        }
+      } catch (err) {
+        console.warn('Real API export failed or offline, falling back to simulated download.');
+      }
+
+      // Simulated download fallback
+      alert(`[Offline Mock] Downloading ${format} export for case: ${caseId}`);
+    }
   };
 
   const columns = [

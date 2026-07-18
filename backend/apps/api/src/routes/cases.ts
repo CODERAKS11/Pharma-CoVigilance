@@ -114,6 +114,27 @@ router.get('/', requireRole(['reviewer', 'admin']), async (req: Request, res: Re
   }
 });
 
+// GET /cases/audit: Get all system-wide audit events (Reviewers and Admins)
+router.get('/audit', requireRole(['reviewer', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const { data: auditEvents, error } = await req.db
+      .from('case_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      logger.error({ error }, 'Failed to fetch system-wide audit events');
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json(auditEvents);
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Unexpected error retrieving system-wide audit logs');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /cases/:id: Get case details (Accessible under RLS constraints)
 router.get('/:id', async (req: Request, res: Response) => {
   try {

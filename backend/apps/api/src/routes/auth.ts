@@ -80,4 +80,70 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
   });
 });
 
+// POST /auth/login: Mock login endpoint to generate valid JWTs for frontend
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Hardcoded mock credentials corresponding to MOCK_USERS in frontend
+    const MOCK_CREDENTIALS: Record<string, { id: string; name: string; role: 'reporter' | 'reviewer' | 'admin'; tenantId: string; pass: string }> = {
+      'reviewer@pharmasafe.io': {
+        id: '66666666-6666-6666-6666-666666666666',
+        name: 'Dr. Sarah Chen',
+        role: 'reviewer',
+        tenantId: 'de000000-0000-0000-0000-000000000001',
+        pass: 'reviewer123'
+      },
+      'admin@pharmasafe.io': {
+        id: '77777777-7777-7777-7777-777777777777',
+        name: 'Admin User',
+        role: 'admin',
+        tenantId: 'de000000-0000-0000-0000-000000000001',
+        pass: 'admin123'
+      },
+      'reporter@pharmasafe.io': {
+        id: '55555555-5555-5555-5555-555555555555',
+        name: 'Dr. Emily Richards',
+        role: 'reporter',
+        tenantId: 'de000000-0000-0000-0000-000000000001',
+        pass: 'reporter123'
+      }
+    };
+
+    const targetUser = MOCK_CREDENTIALS[email.toLowerCase()];
+    if (!targetUser || targetUser.pass !== password) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-secret-key-at-least-32-characters-long';
+    // Sign a token containing the role and tenantId context
+    const token = jwt.sign(
+      {
+        id: targetUser.id,
+        role: targetUser.role,
+        tenantId: targetUser.tenantId,
+        email: email.toLowerCase()
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    logger.info({ userId: targetUser.id, email }, 'Signed mock login token successfully');
+    
+    return res.json({
+      token,
+      user: {
+        id: targetUser.id,
+        email: email.toLowerCase(),
+        name: targetUser.name,
+        role: targetUser.role,
+        tenantId: targetUser.tenantId
+      }
+    });
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Unexpected error in login endpoint');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

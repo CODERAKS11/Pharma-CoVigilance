@@ -1,16 +1,54 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { AuditTimeline } from '../../components/domain/AuditTimeline';
 import { mockSystemAudit } from '../../api/mockData';
+import type { AuditEntry } from '../../api/types';
 
 export default function AuditLogPage() {
+  const [entries, setEntries] = useState<AuditEntry[]>(mockSystemAudit);
   const [actorFilter, setActorFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  useEffect(() => {
+    async function loadAuditLogs() {
+      const token = localStorage.getItem('pharmasafe_token');
+      try {
+        const response = await fetch('http://localhost:4000/cases/audit', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const rawEvents = await response.json();
+          const mapped: AuditEntry[] = rawEvents.map((evt: any) => {
+            let actorTypeStr: 'System' | 'AI Pipeline' | 'Reviewer' | 'Admin' = 'System';
+            if (evt.actor_type === 'ai_pipeline') actorTypeStr = 'AI Pipeline';
+            else if (evt.actor_type === 'reviewer') actorTypeStr = 'Reviewer';
+            else if (evt.actor_type === 'admin') actorTypeStr = 'Admin';
+
+            return {
+              id: evt.id,
+              timestamp: evt.created_at,
+              actor: evt.actor_id || evt.actor_type || 'System',
+              actorType: actorTypeStr,
+              action: evt.action.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              caseId: evt.case_id,
+              details: evt.detail ? JSON.stringify(evt.detail) : undefined
+            };
+          });
+          setEntries(mapped);
+        }
+      } catch (err) {
+        console.warn('Backend audit API unavailable, using local mock audit trails.', err);
+      }
+    }
+    loadAuditLogs();
+  }, []);
+
   const filteredEntries = useMemo(() => {
-    return mockSystemAudit.filter(entry => {
+    return entries.filter(entry => {
       if (actorFilter && entry.actorType !== actorFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();

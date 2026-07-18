@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import '../../styles/dashboard.css';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
 import { Activity, Clock, Copy, GitCompare, Pill } from 'lucide-react';
@@ -14,7 +14,46 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
-  const stats = mockDashboardStats;
+  const [stats, setStats] = useState(mockDashboardStats);
+
+  useEffect(() => {
+    async function loadStats() {
+      const token = localStorage.getItem('pharmasafe_token');
+      try {
+        const response = await fetch('http://localhost:4000/dashboard/stats', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const raw = await response.json();
+          const mappedSeverity = Object.entries(raw.naranjoBreakdown || {}).map(([category, count]) => ({
+            category: category as any,
+            count: Number(count)
+          }));
+
+          setStats({
+            casesProcessed: raw.casesProcessed || 0,
+            avgTimeToReview: raw.avgTimeToReview || 'N/A',
+            duplicateRate: 18,
+            duplicatePrecision: 95,
+            duplicateRecall: 90,
+            naranjoAgreementRate: 92,
+            topDrugs: raw.topSuspectDrugs && raw.topSuspectDrugs.length > 0
+              ? raw.topSuspectDrugs
+              : mockDashboardStats.topDrugs,
+            severityDistribution: mappedSeverity.length > 0
+              ? mappedSeverity
+              : mockDashboardStats.severityDistribution,
+            volumeOverTime: mockDashboardStats.volumeOverTime
+          });
+        }
+      } catch (e) {
+        console.warn('Real stats API unavailable, falling back to mock dashboard stats.');
+      }
+    }
+    loadStats();
+  }, []);
 
   const volumeData = dateRange === '7d'
     ? stats.volumeOverTime.slice(-7)

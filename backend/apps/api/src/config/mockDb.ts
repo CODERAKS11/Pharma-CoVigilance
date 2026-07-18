@@ -101,6 +101,7 @@ export class MockSupabaseQueryBuilder {
   private orderAscending: boolean = true;
   private rangeFrom?: number;
   private rangeTo?: number;
+  private limitCount?: number;
 
   constructor(tableName: string, userContext?: { id: string; role: string; tenantId: string }) {
     this.tableName = tableName;
@@ -248,6 +249,11 @@ export class MockSupabaseQueryBuilder {
     return this;
   }
 
+  limit(count: number) {
+    this.limitCount = count;
+    return this;
+  }
+
   single() {
     return this.execute().then(res => {
       if (res.error) return res;
@@ -297,6 +303,8 @@ export class MockSupabaseQueryBuilder {
     // Pagination
     if (this.rangeFrom !== undefined && this.rangeTo !== undefined) {
       results = results.slice(this.rangeFrom, this.rangeTo + 1);
+    } else if (this.limitCount !== undefined) {
+      results = results.slice(0, this.limitCount);
     }
 
     return { data: results, error: null };
