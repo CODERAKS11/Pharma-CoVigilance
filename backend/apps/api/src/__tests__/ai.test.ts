@@ -183,13 +183,15 @@ describe('PharmaSafe Phase 2 - Core AI Pipeline Tests', () => {
       expect(caseRecord?.priority).toBe('high'); // Updated by triage
 
       // 5. Verify audit logs are created
-      expect(caseEventsTable.length).toBe(4);
+      expect(caseEventsTable.length).toBe(6);
       
       const actions = caseEventsTable.map(e => e.action);
       expect(actions).toContain('validity_checked');
       expect(actions).toContain('duplicate_checked');
       expect(actions).toContain('triage_prioritized');
       expect(actions).toContain('causality_evaluated');
+      expect(actions).toContain('coding_completed');
+      expect(actions).toContain('narrative_drafted');
     });
   });
 });

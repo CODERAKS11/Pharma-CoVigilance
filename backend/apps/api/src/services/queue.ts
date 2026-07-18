@@ -4,6 +4,8 @@ import { EventEmitter } from 'events';
 import { supabaseService } from '../config/supabase';
 import { generateEmbedding, upsertCaseVector, findDuplicateCase } from './dedup';
 import { evaluateNaranjo } from './naranjo';
+import { searchSnomed } from './snomed';
+import { generateNarrativeDraft } from './narrative';
 import { logger } from '../config/logger';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -196,6 +198,16 @@ async function processCasePipeline(caseId: string): Promise<void> {
   logger.info({ caseId }, 'Zone 5: Evaluating Naranjo causality score');
   const naranjoRes = await evaluateNaranjo(narrative, onsetDate);
 
+  // Write Naranjo results directly to case columns
+  await supabaseService
+    .from('cases')
+    .update({
+      naranjo_score: naranjoRes.score,
+      naranjo_category: naranjoRes.category,
+      naranjo_answers: naranjoRes.answers
+    })
+    .eq('id', caseId);
+
   // Write Causality Audit Event
   await supabaseService
     .from('case_events')
@@ -210,6 +222,50 @@ async function processCasePipeline(caseId: string): Promise<void> {
         selfConsistent: naranjoRes.selfConsistent,
         answers: naranjoRes.answers
       }
+    });
+
+  // --- ZONE 5B: SNOMED CT CODING MATCHING ENGINE ---
+  logger.info({ caseId }, 'Zone 5B: Running SNOMED CT symptom coding matcher');
+  const snomedCandidates = await searchSnomed(narrative);
+  await supabaseService
+    .from('cases')
+    .update({ snomed_candidates: snomedCandidates })
+    .eq('id', caseId);
+
+  await supabaseService
+    .from('case_events')
+    .insert({
+      case_id: caseId,
+      actor_type: 'ai_pipeline',
+      action: 'coding_completed',
+      detail: { snomed_candidates: snomedCandidates }
+    });
+
+  // --- ZONE 6: NARRATIVE SUMMARY DRAFT ZONE ---
+  logger.info({ caseId }, 'Zone 6: Generating AI narrative case summary draft');
+  const aiSummary = await generateNarrativeDraft({
+    patientAge: caseRecord.patient?.age,
+    patientSex: caseRecord.patient?.sex || 'unknown',
+    drugName,
+    dosage: caseRecord.dosage,
+    onsetDate,
+    narrative,
+    naranjoScore: naranjoRes.score,
+    naranjoCategory: naranjoRes.category
+  });
+
+  await supabaseService
+    .from('cases')
+    .update({ ai_summary: aiSummary })
+    .eq('id', caseId);
+
+  await supabaseService
+    .from('case_events')
+    .insert({
+      case_id: caseId,
+      actor_type: 'ai_pipeline',
+      action: 'narrative_drafted',
+      detail: { ai_summary: aiSummary }
     });
 
   // Determine target status
