@@ -3,6 +3,7 @@ import cors from 'cors';
 import { logger } from './config/logger';
 import authRouter from './routes/auth';
 import casesRouter from './routes/cases';
+import reviewRouter from './routes/review';
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.get('/health', (req: Request, res: Response) => {
 // Mount Routes
 app.use('/auth', authRouter);
 app.use('/cases', casesRouter);
+app.use('/cases', reviewRouter);
 
 // 404 Route handler
 app.use((req: Request, res: Response) => {
