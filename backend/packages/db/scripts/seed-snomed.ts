@@ -185,14 +185,27 @@ async function seed() {
       logger.warn(`Failed to load parsed RF2 dictionary: ${err.message}. Using default dictionary.`);
     }
 
-    logger.info(`Collection "${COLLECTION_NAME}" ready. Seeding ${sourceDict.length} findings in batches...`);
+    let currentPointsCount = 0;
+    try {
+      const countRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+        headers: getHeaders()
+      });
+      if (countRes.ok) {
+        const countInfo = await countRes.json() as any;
+        currentPointsCount = countInfo.result?.points_count || 0;
+      }
+    } catch (e: any) {
+      logger.warn(`Failed to fetch current points count: ${e.message}`);
+    }
+
+    logger.info(`Collection "${COLLECTION_NAME}" ready. Existing points: ${currentPointsCount}. Seeding remaining ${sourceDict.length - currentPointsCount} findings in batches...`);
 
     const BATCH_SIZE = 128;
     let upserted = 0;
     let failed = 0;
     const startTime = Date.now();
 
-    for (let i = 0; i < sourceDict.length; i += BATCH_SIZE) {
+    for (let i = currentPointsCount; i < sourceDict.length; i += BATCH_SIZE) {
       const batch = sourceDict.slice(i, i + BATCH_SIZE);
 
       try {

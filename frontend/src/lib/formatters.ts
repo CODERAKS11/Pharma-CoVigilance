@@ -60,27 +60,35 @@ export function severityBgColor(cat: SeverityCategory): string {
 }
 
 export function statusColor(status: CaseStatus): { bg: string; text: string } {
-  const map: Record<CaseStatus, { bg: string; text: string }> = {
+  const map: Record<string, { bg: string; text: string }> = {
     new: { bg: 'var(--indigo-muted)', text: 'var(--indigo)' },
+    intake: { bg: 'var(--indigo-muted)', text: 'var(--indigo)' },
     processing: { bg: 'var(--warning-bg)', text: 'var(--warning)' },
     triaged: { bg: 'var(--teal-muted)', text: 'var(--teal)' },
     under_review: { bg: 'var(--severity-probable-bg)', text: 'var(--severity-probable)' },
+    needs_review: { bg: 'var(--severity-probable-bg)', text: 'var(--severity-probable)' },
     reviewed: { bg: 'var(--confirmed-green-bg)', text: 'var(--confirmed-green)' },
     closed: { bg: 'var(--severity-doubtful-bg)', text: 'var(--severity-doubtful)' },
+    exported: { bg: 'var(--severity-doubtful-bg)', text: 'var(--severity-doubtful)' },
+    rejected: { bg: 'var(--severity-definite-bg)', text: 'var(--severity-definite)' },
   };
-  return map[status];
+  return map[status] || { bg: 'var(--bg-surface-hover)', text: 'var(--ink-secondary)' };
 }
 
 export function statusLabel(status: CaseStatus): string {
-  const map: Record<CaseStatus, string> = {
+  const map: Record<string, string> = {
     new: 'New',
+    intake: 'Intake',
     processing: 'Processing',
     triaged: 'Triaged',
     under_review: 'Under Review',
+    needs_review: 'Needs Review',
     reviewed: 'Reviewed',
     closed: 'Closed',
+    exported: 'Exported',
+    rejected: 'Rejected',
   };
-  return map[status];
+  return map[status] || String(status);
 }
 
 export function priorityColor(p: Priority): { bg: string; text: string } {

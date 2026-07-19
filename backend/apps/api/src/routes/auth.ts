@@ -85,7 +85,45 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     
-    // Hardcoded mock credentials corresponding to MOCK_USERS in frontend
+    if (isSupabaseConfigured) {
+      // Authenticate via Supabase Auth
+      const { data, error } = await supabaseService.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error || !data.user || !data.session) {
+        logger.warn({ error: error?.message, email }, 'Supabase authentication failed');
+        return res.status(401).json({ error: error?.message || 'Invalid email or password' });
+      }
+
+      // Query app_users details (role, tenant_id, full_name)
+      const { data: appUser, error: appUserErr } = await supabaseService
+        .from('app_users')
+        .select('role, tenant_id, full_name')
+        .eq('id', data.user.id)
+        .single();
+
+      if (appUserErr || !appUser) {
+        logger.warn({ userId: data.user.id, appUserErr }, 'Failed to locate user details in app_users profile table');
+        return res.status(401).json({ error: 'User registration profile not found in database' });
+      }
+
+      logger.info({ userId: data.user.id, email }, 'User successfully authenticated via Supabase');
+
+      return res.json({
+        token: data.session.access_token,
+        user: {
+          id: data.user.id,
+          email: email.toLowerCase(),
+          name: appUser.full_name,
+          role: appUser.role,
+          tenantId: appUser.tenant_id
+        }
+      });
+    }
+
+    // Fallback to local mock mode if Supabase is offline/not configured
     const MOCK_CREDENTIALS: Record<string, { id: string; name: string; role: 'reporter' | 'reviewer' | 'admin'; tenantId: string; pass: string }> = {
       'reviewer@pharmasafe.io': {
         id: '66666666-6666-6666-6666-666666666666',

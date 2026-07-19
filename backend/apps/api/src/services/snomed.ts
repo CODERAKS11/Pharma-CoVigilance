@@ -1,6 +1,35 @@
 import { generateEmbedding } from './dedup';
-import { SNOMED_DICTIONARY, SnomedRecord } from '../../../../packages/db/scripts/seed-snomed';
 import { logger } from '../config/logger';
+
+export interface SnomedRecord {
+  code: string;
+  term: string;
+  synonyms: string[];
+  semantic_tag?: string;
+}
+
+export const SNOMED_DICTIONARY: SnomedRecord[] = [
+  { code: '73442001', term: 'Stevens-Johnson syndrome', synonyms: ['sjs', 'blistering skin rash', 'toxic skin necrosis'] },
+  { code: '80449002', term: 'Nausea', synonyms: ['feeling sick', 'nauseous', 'queasy'] },
+  { code: '422400008', term: 'Vomiting', synonyms: ['emesis', 'throwing up', 'vomited'] },
+  { code: '25064002', term: 'Headache', synonyms: ['cephalgia', 'head pain', 'throbbing head'] },
+  { code: '39579001', term: 'Anaphylaxis', synonyms: ['anaphylactic shock', 'severe allergic reaction', 'anaphylactic response'] },
+  { code: '65124004', term: 'Dyspnea', synonyms: ['shortness of breath', 'breathlessness', 'difficulty breathing'] },
+  { code: '22298006', term: 'Myocardial infarction', synonyms: ['heart attack', 'cardiac infarction', 'coronary thrombosis'] },
+  { code: '50373000', term: 'Hepatotoxicity', synonyms: ['liver injury', 'toxic liver disease', 'hepatic damage'] },
+  { code: '109312009', term: 'Rhabdomyolysis', synonyms: ['muscle breakdown', 'myoglobinuria', 'skeletal muscle necrosis'] },
+  { code: '442685003', term: 'Lactic acidosis', synonyms: ['acidosis', 'high lactate levels', 'blood acidity'] },
+  { code: '27624003', term: 'Gastric ulcer', synonyms: ['stomach ulcer', 'peptic ulcer', 'gastric lesion'] },
+  { code: '29040007', term: 'GI bleeding', synonyms: ['gastrointestinal hemorrhage', 'stomach bleeding', 'blood in stool'] },
+  { code: '48750000', term: 'Angioedema', synonyms: ['facial swelling', 'swollen lips', 'allergic tissue edema'] },
+  { code: '302213007', term: 'Tendon rupture', synonyms: ['torn tendon', 'achilles tendon tear', 'tendon snap'] },
+  { code: '271795006', term: 'Skin rash', synonyms: ['rash', 'hives', 'dermatitis', 'erythema'] },
+  { code: '3723001', term: 'Arthralgia', synonyms: ['joint pain', 'painful joints', 'aching joints'] },
+  { code: '29857009', term: 'Chest pain', synonyms: ['chest discomfort', 'sternal pain', 'tightness in chest'] },
+  { code: '426000000', term: 'Renal impairment', synonyms: ['kidney damage', 'renal failure', 'kidney insufficiency'] },
+  { code: '418363000', term: 'Itching', synonyms: ['pruritus', 'itchy skin'] },
+  { code: '386661006', term: 'Fever', synonyms: ['pyrexia', 'high temperature', 'febrile'] }
+];
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';

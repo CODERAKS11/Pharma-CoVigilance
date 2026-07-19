@@ -102,8 +102,14 @@ describe('PharmaSafe Phase 2 - Core AI Pipeline Tests', () => {
       const text2 = 'nausea after Metformin intake.';
       const vec2 = await generateEmbedding(text2);
 
-      const duplicateId = await findDuplicateCase(tenantId, 'METFORMIN', vec2);
-      expect(duplicateId).toBe(caseId1);
+      const duplicateMatch = await findDuplicateCase(tenantId, 'METFORMIN', vec2);
+      expect(duplicateMatch?.duplicateId).toBe(caseId1);
+      expect(duplicateMatch?.score).toBeGreaterThan(0.85);
+      expect(duplicateMatch?.candidates).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: caseId1, score: expect.any(Number) })
+        ])
+      );
     });
 
     it('should ignore matches on different drugs or tenants', async () => {

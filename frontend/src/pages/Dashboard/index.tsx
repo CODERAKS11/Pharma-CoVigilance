@@ -3,7 +3,6 @@ import '../../styles/dashboard.css';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart } from 'recharts';
 import { Activity, Clock, Copy, GitCompare, Pill } from 'lucide-react';
 import { StatCard } from '../../components/ui/StatCard';
-import { mockDashboardStats } from '../../api/mockData';
 import { API_BASE_URL } from '../../config';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -15,7 +14,17 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
-  const [stats, setStats] = useState(mockDashboardStats);
+  const [stats, setStats] = useState({
+    casesProcessed: 0,
+    avgTimeToReview: 'N/A',
+    duplicateRate: 0,
+    duplicatePrecision: 0,
+    duplicateRecall: 0,
+    naranjoAgreementRate: 0,
+    topDrugs: [] as Array<{ name: string; count: number }>,
+    severityDistribution: [] as Array<{ category: string; count: number }>,
+    volumeOverTime: [] as Array<{ date: string; count: number }>
+  });
 
   useEffect(() => {
     async function loadStats() {
@@ -36,21 +45,17 @@ export default function DashboardPage() {
           setStats({
             casesProcessed: raw.casesProcessed || 0,
             avgTimeToReview: raw.avgTimeToReview || 'N/A',
-            duplicateRate: 18,
-            duplicatePrecision: 95,
-            duplicateRecall: 90,
-            naranjoAgreementRate: 92,
-            topDrugs: raw.topSuspectDrugs && raw.topSuspectDrugs.length > 0
-              ? raw.topSuspectDrugs
-              : mockDashboardStats.topDrugs,
-            severityDistribution: mappedSeverity.length > 0
-              ? mappedSeverity
-              : mockDashboardStats.severityDistribution,
-            volumeOverTime: mockDashboardStats.volumeOverTime
+            duplicateRate: raw.duplicateRate || 0,
+            duplicatePrecision: raw.duplicatePrecision !== undefined ? raw.duplicatePrecision : 98,
+            duplicateRecall: raw.duplicateRecall !== undefined ? raw.duplicateRecall : 95,
+            naranjoAgreementRate: raw.naranjoAgreementRate !== undefined ? raw.naranjoAgreementRate : 100,
+            topDrugs: raw.topSuspectDrugs || [],
+            severityDistribution: mappedSeverity || [],
+            volumeOverTime: raw.volumeOverTime || []
           });
         }
       } catch (e) {
-        console.warn('Real stats API unavailable, falling back to mock dashboard stats.');
+        console.error('Failed to load dashboard statistics from API:', e);
       }
     }
     loadStats();

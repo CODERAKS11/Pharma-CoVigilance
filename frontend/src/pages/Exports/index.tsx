@@ -1,14 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Download, FileText, CheckCircle } from 'lucide-react';
 import { DataTable } from '../../components/ui/DataTable';
 import { Badge } from '../../components/ui/Badge';
-import { mockExports } from '../../api/mockData';
 import { formatDate } from '../../lib/formatters';
 import type { ExportRecord } from '../../api/types';
 import { API_BASE_URL } from '../../config';
 
 export default function ExportsPage() {
+  const [exportCases, setExportCases] = useState<ExportRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    async function loadExports() {
+      const token = localStorage.getItem('pharmasafe_token');
+      try {
+        const response = await fetch(`${API_BASE_URL}/cases?status=reviewed`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const raw = await response.json();
+          const rawList = Array.isArray(raw) ? raw : (raw.cases || []);
+          const mapped: ExportRecord[] = rawList.map((c: any) => ({
+            caseId: c.id,
+            caseNumber: c.id.substring(0, 8).toUpperCase(),
+            drugName: c.drug?.name || 'Unknown Suspect Drug',
+            adverseEvent: c.narrative ? c.narrative.substring(0, 50) + '...' : 'Adverse event',
+            status: c.status || 'reviewed',
+            naranjoCategory: c.naranjo_category || 'Doubtful',
+            reviewedAt: c.reviewed_at || c.updated_at || new Date().toISOString(),
+            exportedAt: c.exported_at
+          }));
+          setExportCases(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load exportable cases:', err);
+      }
+    }
+    loadExports();
+  }, []);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -20,10 +51,10 @@ export default function ExportsPage() {
   };
 
   const toggleAll = () => {
-    if (selectedIds.size === mockExports.length) {
+    if (selectedIds.size === exportCases.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(mockExports.map(e => e.caseId)));
+      setSelectedIds(new Set(exportCases.map(e => e.caseId)));
     }
   };
 
@@ -165,18 +196,18 @@ export default function ExportsPage() {
         <label className="checkbox-group" style={{ cursor: 'pointer' }}>
           <input
             type="checkbox"
-            checked={selectedIds.size === mockExports.length}
+            checked={selectedIds.size === exportCases.length}
             onChange={toggleAll}
           />
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)' }}>
-            Select all ({mockExports.length} cases)
+            Select all ({exportCases.length} cases)
           </span>
         </label>
       </div>
 
       <DataTable<ExportRecord>
         columns={columns}
-        data={mockExports}
+        data={exportCases}
         rowKey={r => r.caseId}
         emptyMessage="No reviewed cases available for export"
         emptyDescription="Cases must be reviewed before they can be exported"

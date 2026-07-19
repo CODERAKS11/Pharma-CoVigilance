@@ -248,6 +248,24 @@ export async function initQdrant() {
         logger.error({ status: createRes.status }, 'Failed to create Qdrant collection');
       }
     }
+
+    // Ensure payload indexes exist
+    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/index?wait=true`, {
+      method: 'PUT',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        field_name: 'tenantId',
+        field_schema: 'keyword'
+      })
+    });
+    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/index?wait=true`, {
+      method: 'PUT',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        field_name: 'drugName',
+        field_schema: 'keyword'
+      })
+    });
   } catch (err: any) {
     logger.error({ error: err.message }, 'Qdrant initialization failed. Falling back to Mock Qdrant.');
     useMockQdrant = true;
@@ -262,18 +280,21 @@ export async function upsertCaseVector(
   vector: number[],
   payload: { tenantId: string; drugName: string; narrative: string }
 ): Promise<void> {
+  const normalizedPayload = {
+    ...payload,
+    drugName: payload.drugName.toUpperCase()
+  };
+
   if (useMockQdrant) {
     // Remove if exists and push new
     const idx = mockQdrantStore.findIndex(p => p.id === caseId);
     if (idx !== -1) mockQdrantStore.splice(idx, 1);
     
-    mockQdrantStore.push({ id: caseId, vector, payload });
+    mockQdrantStore.push({ id: caseId, vector, payload: normalizedPayload });
     return;
   }
 
   try {
-    // Format UUID as string if it is not a standard UUID (Qdrant requires UUIDs or integers)
-    // Qdrant allows string UUIDs for point IDs
     const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
       method: 'PUT',
       headers: getHeaders({ 'Content-Type': 'application/json' }),
@@ -282,7 +303,7 @@ export async function upsertCaseVector(
           {
             id: caseId,
             vector,
-            payload
+            payload: normalizedPayload
           }
         ]
       })
@@ -298,21 +319,28 @@ export async function upsertCaseVector(
   }
 }
 
+export interface DuplicateMatchResult {
+  duplicateId: string;
+  score: number;
+  candidates: Array<{ id: string; score: number }>;
+}
+
 /**
- * Search Qdrant for duplicates of the same drug within the same tenant.
+ * Search Qdrant for duplicates of cases within the same tenant.
  * Cosine similarity threshold > 0.85 indicates near duplicate.
  */
 export async function findDuplicateCase(
   tenantId: string,
   drugName: string,
   vector: number[]
-): Promise<string | null> {
+): Promise<DuplicateMatchResult | null> {
   const THRESHOLD = 0.85;
 
   if (useMockQdrant) {
     // In-memory cosine similarity comparison
     let bestMatchId: string | null = null;
     let highestSim = 0;
+    const allMatches: Array<{ id: string; score: number }> = [];
 
     for (const point of mockQdrantStore) {
       if (
@@ -325,13 +353,24 @@ export async function findDuplicateCase(
         const magB = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
         const similarity = dotProduct / (magA * magB);
 
-        if (similarity > THRESHOLD && similarity > highestSim) {
-          highestSim = similarity;
-          bestMatchId = point.id;
+        if (similarity > THRESHOLD) {
+          allMatches.push({ id: point.id, score: similarity });
+          if (similarity > highestSim) {
+            highestSim = similarity;
+            bestMatchId = point.id;
+          }
         }
       }
     }
-    return bestMatchId;
+
+    if (bestMatchId) {
+      return {
+        duplicateId: bestMatchId,
+        score: highestSim,
+        candidates: allMatches.sort((a, b) => b.score - a.score)
+      };
+    }
+    return null;
   }
 
   try {
@@ -340,7 +379,7 @@ export async function findDuplicateCase(
       headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         vector,
-        limit: 1,
+        limit: 5,
         with_payload: true,
         filter: {
           must: [
@@ -361,7 +400,11 @@ export async function findDuplicateCase(
     
     if (matches.length > 0 && matches[0].score > THRESHOLD) {
       logger.info({ duplicateId: matches[0].id, score: matches[0].score }, 'Duplicate case identified via semantic search');
-      return matches[0].id;
+      return {
+        duplicateId: matches[0].id,
+        score: matches[0].score,
+        candidates: matches.map((m: any) => ({ id: m.id, score: m.score }))
+      };
     }
 
     return null;

@@ -8,8 +8,6 @@ import { searchSnomed } from './snomed';
 import { generateNarrativeDraft } from './narrative';
 import { logger } from '../config/logger';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-
 let redisConnection: IORedis | null = null;
 let caseQueue: Queue | null = null;
 let caseWorker: Worker | null = null;
@@ -24,9 +22,16 @@ const mockQueueEmitter = new MockQueueEmitter();
  * Automatically falls back to in-memory event-driven processing if Redis is unavailable.
  */
 export async function initQueue() {
-  if (REDIS_URL === 'mock' || REDIS_URL.startsWith('redis://localhost')) {
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+  if (process.env.NODE_ENV === 'test') {
+    useMockQueue = true;
+    return;
+  }
+
+  if (redisUrl === 'mock' || redisUrl.startsWith('redis://localhost')) {
     try {
-      redisConnection = new IORedis(REDIS_URL, {
+      redisConnection = new IORedis(redisUrl, {
         maxRetriesPerRequest: null,
         connectTimeout: 1000,
         enableOfflineQueue: false,
@@ -50,7 +55,7 @@ export async function initQueue() {
     }
   } else {
     try {
-      redisConnection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
+      redisConnection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
       useMockQueue = false;
     } catch (err: any) {
       logger.error({ error: err.message }, 'Failed to connect to Redis. Falling back to Mock Queue.');
@@ -95,6 +100,11 @@ export async function initQueue() {
  */
 export async function enqueueCaseJob(caseId: string): Promise<void> {
   if (useMockQueue) {
+    if (process.env.NODE_ENV === 'test') {
+      await processCasePipeline(caseId);
+      return;
+    }
+
     // Push task execution to next tick to run asynchronously
     process.nextTick(() => {
       mockQueueEmitter.emit('enqueue', caseId);
@@ -146,14 +156,14 @@ async function processCasePipeline(caseId: string): Promise<void> {
   // --- ZONE 3: DEDUPLICATION ---
   logger.info({ caseId }, 'Zone 3: Running duplicate detection');
   const embedding = await generateEmbedding(narrative);
-  const duplicateId = await findDuplicateCase(tenantId, drugName, embedding);
+  const duplicateMatch = await findDuplicateCase(tenantId, drugName, embedding);
 
   // Store embedding vector in vector database
   await upsertCaseVector(caseId, embedding, { tenantId, drugName, narrative });
 
   let isDuplicate = false;
-  if (duplicateId && duplicateId !== caseId) {
-    logger.warn({ caseId, duplicateId }, 'Potential duplicate case flagged');
+  if (duplicateMatch && duplicateMatch.duplicateId !== caseId) {
+    logger.warn({ caseId, duplicateId: duplicateMatch.duplicateId, score: duplicateMatch.score }, 'Potential duplicate case flagged');
     isDuplicate = true;
     
     await supabaseService
@@ -162,7 +172,13 @@ async function processCasePipeline(caseId: string): Promise<void> {
         case_id: caseId,
         actor_type: 'system',
         action: 'duplicate_checked',
-        detail: { duplicate_found: true, duplicate_case_id: duplicateId }
+        detail: {
+          duplicate_found: true,
+          duplicate_case_id: duplicateMatch.duplicateId,
+          score: duplicateMatch.score,
+          similarity_score: duplicateMatch.score,
+          candidates: duplicateMatch.candidates
+        }
       });
   } else {
     await supabaseService

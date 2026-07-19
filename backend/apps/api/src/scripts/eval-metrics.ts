@@ -94,7 +94,8 @@ export async function runEvaluation() {
 
     // 3. Evaluate Deduplication Precision / Recall
     const vector = await generateEmbedding(item.narrative);
-    const matchedId = await findDuplicateCase(item.tenantId, item.drugName, vector);
+    const duplicateMatch = await findDuplicateCase(item.tenantId, item.drugName, vector);
+    const matchedId = duplicateMatch ? duplicateMatch.duplicateId : null;
 
     const actualIsDuplicate = item.isDuplicateOfIndex !== undefined;
     const predictedIsDuplicate = matchedId !== null;

@@ -4,67 +4,67 @@ import '../../styles/queue.css';
 import { DataTable } from '../../components/ui/DataTable';
 import { Badge } from '../../components/ui/Badge';
 import { FilterBar, type FilterState } from '../../components/ui/FilterBar';
-import { mockCases } from '../../api/mockData';
 import { formatDate, formatTimeAgo } from '../../lib/formatters';
 import type { CaseRecord } from '../../api/types';
 import CaseDetail from '../CaseDetail';
 import { API_BASE_URL } from '../../config';
 
 export default function QueuePage() {
-  const [cases, setCases] = useState<CaseRecord[]>(mockCases);
+  const [cases, setCases] = useState<CaseRecord[]>([]);
   const [filters, setFilters] = useState<FilterState>({ search: '', status: '', priority: '', dateFrom: '', dateTo: '' });
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadCases() {
-      const token = localStorage.getItem('pharmasafe_token');
-      try {
-        const response = await fetch(`${API_BASE_URL}/cases`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          const raw = await response.json();
-          // Extract the cases array from backend wrapper response { cases, page, pageSize }
-          const rawList = Array.isArray(raw) ? raw : (raw.cases || []);
-
-          const mapped: CaseRecord[] = rawList.map((c: any) => {
-            return {
-              id: c.id,
-              caseNumber: c.id.substring(0, 8).toUpperCase(),
-              status: c.status || 'new',
-              priority: c.priority || 'low',
-              patientAge: c.patient?.age || 35,
-              patientSex: c.patient?.sex === 'male' ? 'Male' : (c.patient?.sex === 'female' ? 'Female' : 'Other'),
-              drugName: c.drug?.name || 'METFORMIN',
-              drugDosage: c.dosage || '10mg',
-              indication: 'Adverse Drug Reaction Triage',
-              adverseEvent: c.narrative ? c.narrative.substring(0, 50) + '...' : 'Adverse event',
-              narrative: c.narrative || '',
-              seriousness: [
-                c.hospitalization && 'hospitalization',
-                c.life_threatening && 'life_threatening',
-                c.disability && 'disability'
-              ].filter(Boolean) as any[],
-              onsetDate: c.onset_date || new Date().toISOString(),
-              reportDate: c.created_at || new Date().toISOString(),
-              reporterType: c.reporter_type || 'healthcare_professional',
-              naranjoScore: c.naranjo_score || 0,
-              naranjoCategory: c.naranjo_category || 'Doubtful',
-              naranjoAnswers: c.naranjo_answers || [],
-              snomedCandidates: c.snomed_candidates || [],
-              auditTrail: [],
-              createdAt: c.created_at,
-              updatedAt: c.updated_at
-            };
-          });
-          setCases(mapped);
+  async function loadCases() {
+    const token = localStorage.getItem('pharmasafe_token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/cases`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (err) {
-        console.warn('Backend cases API unavailable, using local mock cases.', err);
+      });
+      if (response.ok) {
+        const raw = await response.json();
+        // Extract the cases array from backend wrapper response { cases, page, pageSize }
+        const rawList = Array.isArray(raw) ? raw : (raw.cases || []);
+
+        const mapped: CaseRecord[] = rawList.map((c: any) => {
+          return {
+            id: c.id,
+            caseNumber: c.id.substring(0, 8).toUpperCase(),
+            status: c.status || 'new',
+            priority: c.priority || 'low',
+            patientAge: c.patient?.age || 35,
+            patientSex: c.patient?.sex === 'male' ? 'Male' : (c.patient?.sex === 'female' ? 'Female' : 'Other'),
+            drugName: c.drug?.name || 'METFORMIN',
+            drugDosage: c.dosage || '10mg',
+            indication: 'Adverse Drug Reaction Triage',
+            adverseEvent: c.narrative ? c.narrative.substring(0, 50) + '...' : 'Adverse event',
+            narrative: c.narrative || '',
+            seriousness: [
+              c.hospitalization && 'hospitalization',
+              c.life_threatening && 'life_threatening',
+              c.disability && 'disability'
+            ].filter(Boolean) as any[],
+            onsetDate: c.onset_date || new Date().toISOString(),
+            reportDate: c.created_at || new Date().toISOString(),
+            reporterType: c.reporter_type || 'healthcare_professional',
+            naranjoScore: c.naranjo_score || 0,
+            naranjoCategory: c.naranjo_category || 'Doubtful',
+            naranjoAnswers: c.naranjo_answers || [],
+            snomedCandidates: c.snomed_candidates || [],
+            auditTrail: [],
+            createdAt: c.created_at,
+            updatedAt: c.updated_at
+          };
+        });
+        setCases(mapped);
       }
+    } catch (err) {
+      console.error('Failed to load cases from API:', err);
     }
+  }
+
+  useEffect(() => {
     loadCases();
   }, []);
 
@@ -192,6 +192,7 @@ export default function QueuePage() {
           <CaseDetail
             caseData={selectedCase}
             onClose={() => setSelectedCaseId(null)}
+            onActionComplete={loadCases}
           />
         )}
       </div>

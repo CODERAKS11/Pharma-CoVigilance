@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import ws from 'ws';
 import { MockSupabaseQueryBuilder, mockRpc } from './mockDb';
+
+// Provide native WebSocket support for Node.js 20 runtime (Supabase client requirement)
+if (typeof globalThis.WebSocket === 'undefined') {
+  (globalThis as any).WebSocket = ws;
+}
 
 dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
@@ -10,6 +16,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export const isSupabaseConfigured = 
+  process.env.NODE_ENV !== 'test' &&
   supabaseUrl && 
   supabaseAnonKey && 
   supabaseServiceKey && 
@@ -57,4 +64,3 @@ export function createRequestClient(token: string, userContext?: { id: string; r
     };
   }
 }
-

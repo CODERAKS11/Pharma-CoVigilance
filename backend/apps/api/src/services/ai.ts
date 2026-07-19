@@ -102,10 +102,78 @@ export function verifyGroundedness(quote: string, text: string): boolean {
 /**
  * Single LLM call helper (supports Gemini with mock fallback)
  */
+// Helper to convert Zod Schema to OpenAPI Schema representation for Gemini Flash responseSchema
+function zodToOpenApiSchema(schema: any): any {
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape;
+    const properties: any = {};
+    const required: string[] = [];
+
+    for (const [key, val] of Object.entries(shape)) {
+      properties[key] = zodToOpenApiSchema(val);
+      if (!(val instanceof z.ZodOptional) && !(val instanceof z.ZodNullable)) {
+        required.push(key);
+      }
+    }
+
+    return {
+      type: 'object',
+      properties,
+      required: required.length > 0 ? required : undefined
+    };
+  }
+
+  if (schema instanceof z.ZodEnum) {
+    return {
+      type: 'string',
+      enum: schema.options
+    };
+  }
+
+  if (schema instanceof z.ZodString) {
+    return {
+      type: 'string'
+    };
+  }
+
+  if (schema instanceof z.ZodNumber) {
+    return {
+      type: 'number'
+    };
+  }
+
+  if (schema instanceof z.ZodBoolean) {
+    return {
+      type: 'boolean'
+    };
+  }
+
+  if (schema instanceof z.ZodArray) {
+    return {
+      type: 'array',
+      items: zodToOpenApiSchema(schema.element)
+    };
+  }
+
+  if (schema instanceof z.ZodEffects) {
+    return zodToOpenApiSchema(schema.innerType());
+  }
+
+  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) {
+    return zodToOpenApiSchema(schema.unwrap());
+  }
+
+  return { type: 'string' }; // fallback
+}
+
+/**
+ * Single LLM call helper (supports Gemini with mock fallback)
+ */
 async function executeLLMCall(
   systemPrompt: string,
   userPrompt: string,
   temperature: number = 0.0,
+  openApiSchema?: any,
   retries = 5
 ): Promise<string> {
   if (!hasLLMKeys) {
@@ -115,6 +183,16 @@ async function executeLLMCall(
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const activeKey = getActiveGeminiKey();
+      
+      const generationConfig: any = {
+        responseMimeType: 'application/json',
+        temperature
+      };
+      
+      if (openApiSchema) {
+        generationConfig.responseSchema = openApiSchema;
+      }
+
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${activeKey}`,
         {
@@ -130,10 +208,7 @@ async function executeLLMCall(
             systemInstruction: {
               parts: [{ text: systemPrompt }]
             },
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature
-            }
+            generationConfig
           }),
           signal: AbortSignal.timeout(20000)
         }
@@ -199,10 +274,9 @@ You MUST respond with a single valid JSON object. Do not include markdown codebl
 
 <narrative>
 ${redactedNarrative}
-</narrative>
+</narrative>`;
 
-Instruction: You must also output a field named "supportingQuote" containing the verbatim substring from the narrative that justifies your answer.`;
-
+  const openApiSchema = zodToOpenApiSchema(responseSchema);
   let responseText1 = '{}';
   let responseText2 = '{}';
   let parsedData: any;
@@ -210,7 +284,7 @@ Instruction: You must also output a field named "supportingQuote" containing the
 
   try {
     // Run Call 1
-    responseText1 = await executeLLMCall(systemPrompt, userPrompt, temperature);
+    responseText1 = await executeLLMCall(systemPrompt, userPrompt, temperature, openApiSchema);
     let rawJson1 = parseCleanJson(responseText1);
 
     // Validate Schema for Call 1
@@ -218,7 +292,7 @@ Instruction: You must also output a field named "supportingQuote" containing the
     if (!validationResult.success) {
       // Retry once
       logger.warn('First LLM output failed schema validation. Retrying once...');
-      responseText1 = await executeLLMCall(systemPrompt, userPrompt, temperature);
+      responseText1 = await executeLLMCall(systemPrompt, userPrompt, temperature, openApiSchema);
       rawJson1 = parseCleanJson(responseText1);
       validationResult = responseSchema.safeParse(rawJson1);
     }
@@ -230,7 +304,7 @@ Instruction: You must also output a field named "supportingQuote" containing the
     parsedData = validationResult.data;
 
     // Run Call 2 for Self-Consistency Check (only for Naranjo/Extraction calls)
-    responseText2 = await executeLLMCall(systemPrompt, userPrompt, temperature + 0.1);
+    responseText2 = await executeLLMCall(systemPrompt, userPrompt, temperature + 0.1, openApiSchema);
     const rawJson2 = parseCleanJson(responseText2);
     const validationResult2 = responseSchema.safeParse(rawJson2);
 

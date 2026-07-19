@@ -59,8 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
-        localStorage.setItem('pharmasafe_user', JSON.stringify(data.user));
+        const normalizedUser = {
+          ...data.user,
+          role: data.user.role === 'reporter' ? 'Reporter' :
+                data.user.role === 'reviewer' ? 'Reviewer' :
+                data.user.role === 'admin' ? 'Admin' :
+                data.user.role
+        };
+        setUser(normalizedUser);
+        localStorage.setItem('pharmasafe_user', JSON.stringify(normalizedUser));
         localStorage.setItem('pharmasafe_token', data.token);
         setLoading(false);
         return;

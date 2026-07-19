@@ -1,12 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { AuditTimeline } from '../../components/domain/AuditTimeline';
-import { mockSystemAudit } from '../../api/mockData';
 import type { AuditEntry } from '../../api/types';
 import { API_BASE_URL } from '../../config';
 
 export default function AuditLogPage() {
-  const [entries, setEntries] = useState<AuditEntry[]>(mockSystemAudit);
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [actorFilter, setActorFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -42,7 +41,7 @@ export default function AuditLogPage() {
           setEntries(mapped);
         }
       } catch (err) {
-        console.warn('Backend audit API unavailable, using local mock audit trails.', err);
+        console.error('Failed to load audit logs from API:', err);
       }
     }
     loadAuditLogs();

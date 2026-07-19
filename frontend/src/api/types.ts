@@ -4,7 +4,7 @@ export type UserRole = 'Reporter' | 'Reviewer' | 'Admin';
 
 export type SourceType = 'structured_field' | 'llm_inferred' | 'reviewer_confirmed';
 
-export type CaseStatus = 'new' | 'processing' | 'triaged' | 'under_review' | 'reviewed' | 'closed';
+export type CaseStatus = 'new' | 'processing' | 'triaged' | 'under_review' | 'reviewed' | 'closed' | 'intake' | 'needs_review' | 'exported' | 'rejected';
 
 export type SeverityCategory = 'Definite' | 'Probable' | 'Possible' | 'Doubtful';
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, CheckCircle, Edit3, XCircle, FileText, Calendar, User, Pill, AlertTriangle } from 'lucide-react';
 import { CausalityDial } from '../../components/domain/CausalityDial';
 import { NaranjoBreakdown } from '../../components/domain/NaranjoBreakdown';
@@ -7,43 +7,164 @@ import { AuditTimeline } from '../../components/domain/AuditTimeline';
 import { Badge } from '../../components/ui/Badge';
 import { SourceTag } from '../../components/ui/SourceTag';
 import { formatDate } from '../../lib/formatters';
-import type { CaseRecord } from '../../api/types';
+import type { CaseRecord, SnomedCandidate, NaranjoAnswer, SeverityCategory, AuditEntry } from '../../api/types';
 import { API_BASE_URL } from '../../config';
 
 interface CaseDetailProps {
   caseData: CaseRecord;
   onClose: () => void;
+  onActionComplete?: () => void;
 }
 
-export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
+export default function CaseDetail({ caseData, onClose, onActionComplete }: CaseDetailProps) {
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
   const [actionTaken, setActionTaken] = useState<string | null>(null);
+  const [auditTrail, setAuditTrail] = useState<AuditEntry[]>([]);
 
-  const handleAction = async (action: 'confirm' | 'override' | 'reject') => {
-    if (action === 'confirm' || action === 'override') {
+  // Fetch real-time audit trail for this case
+  useEffect(() => {
+    async function loadCaseAudit() {
       const token = localStorage.getItem('pharmasafe_token');
       try {
-        await fetch(`${API_BASE_URL}/cases/${caseData.id}/review/confirm`, {
+        const response = await fetch(`${API_BASE_URL}/cases/${caseData.id}/audit`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const rawEvents = await response.json();
+          const mapped: AuditEntry[] = rawEvents.map((evt: any) => {
+            let actorTypeStr: 'System' | 'AI Pipeline' | 'Reviewer' | 'Admin' = 'System';
+            if (evt.actor_type === 'ai_pipeline') actorTypeStr = 'AI Pipeline';
+            else if (evt.actor_type === 'reviewer') actorTypeStr = 'Reviewer';
+            else if (evt.actor_type === 'admin') actorTypeStr = 'Admin';
+
+            return {
+              id: evt.id,
+              timestamp: evt.created_at,
+              actor: evt.actor_id || evt.actor_type || 'System',
+              actorType: actorTypeStr,
+              action: evt.action.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              caseId: evt.case_id,
+              details: evt.detail
+            };
+          });
+          setAuditTrail(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load case audit trail:', err);
+      }
+    }
+    loadCaseAudit();
+  }, [caseData.id]);
+
+  const duplicateCheckEvent = auditTrail.find(evt => 
+    evt.action === 'Duplicate Checked' && (evt.details as any)?.duplicate_found === true
+  );
+
+  // Live interactive state variables
+  const [seriousness, setSeriousness] = useState<string[]>(caseData.seriousness || []);
+  const [snomedCandidates, setSnomedCandidates] = useState<SnomedCandidate[]>(caseData.snomedCandidates || []);
+  const [naranjoAnswers, setNaranjoAnswers] = useState<NaranjoAnswer[]>(caseData.naranjoAnswers || []);
+  const [naranjoScore, setNaranjoScore] = useState<number>(caseData.naranjoScore || 0);
+  const [naranjoCategory, setNaranjoCategory] = useState<SeverityCategory>(caseData.naranjoCategory || 'Doubtful');
+
+  const handleNaranjoChange = (updatedAnswers: NaranjoAnswer[]) => {
+    const newScore = updatedAnswers.reduce((sum, a) => sum + a.score, 0);
+    let newCategory: SeverityCategory = 'Doubtful';
+    if (newScore >= 9) newCategory = 'Definite';
+    else if (newScore >= 5) newCategory = 'Probable';
+    else if (newScore >= 1) newCategory = 'Possible';
+
+    setNaranjoAnswers(updatedAnswers);
+    setNaranjoScore(newScore);
+    setNaranjoCategory(newCategory);
+    setOverrideMode(true);
+  };
+
+  const handleSnomedSelect = (code: string) => {
+    const updated = snomedCandidates.map(c => {
+      if (c.code === code) {
+        return { ...c, selected: !c.selected };
+      }
+      return c;
+    });
+    setSnomedCandidates(updated);
+    setOverrideMode(true);
+  };
+
+  const handleSnomedAdd = (newCandidate: SnomedCandidate) => {
+    if (snomedCandidates.some(c => c.code === newCandidate.code)) return;
+    setSnomedCandidates([...snomedCandidates, newCandidate]);
+    setOverrideMode(true);
+  };
+
+  const handleAction = async (action: 'confirm' | 'override' | 'reject') => {
+    const token = localStorage.getItem('pharmasafe_token');
+    
+    if (action === 'confirm' || action === 'override') {
+      try {
+        const response = await fetch(`${API_BASE_URL}/cases/${caseData.id}/review/confirm`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            seriousness: caseData.seriousness || [],
-            snomedCandidates: caseData.snomedCandidates || [],
-            naranjoAnswers: caseData.naranjoAnswers || []
+            seriousness: seriousness,
+            snomedCandidates: snomedCandidates,
+            naranjoAnswers: naranjoAnswers,
+            overrideReason: action === 'override' ? overrideReason : undefined
           })
         });
+
+        if (response.ok) {
+          setActionTaken(action);
+          setTimeout(() => {
+            setActionTaken(null);
+            if (onActionComplete) onActionComplete();
+            onClose();
+          }, 2000);
+        } else {
+          const errData = await response.json();
+          alert(`Failed to save case review: ${errData.error || 'Server error'}`);
+        }
       } catch (err) {
-        console.warn('Real API review submission failed or offline, falling back to simulated confirm.');
+        console.error('Failed to submit case review:', err);
+      }
+    } else if (action === 'reject') {
+      try {
+        const response = await fetch(`${API_BASE_URL}/cases/${caseData.id}/review/reject`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          setActionTaken(action);
+          setTimeout(() => {
+            setActionTaken(null);
+            if (onActionComplete) onActionComplete();
+            onClose();
+          }, 2000);
+        } else {
+          const errData = await response.json();
+          alert(`Failed to reject case: ${errData.error || 'Server error'}`);
+        }
+      } catch (err) {
+        console.error('Failed to reject case:', err);
       }
     }
-    setActionTaken(action);
-    setTimeout(() => setActionTaken(null), 3000);
-    if (action !== 'override') setOverrideMode(false);
+    
+    if (action !== 'override') {
+      setOverrideMode(false);
+      setOverrideReason('');
+    }
   };
+
+  const isEditable = caseData.status !== 'reviewed' && caseData.status !== 'closed' && caseData.status !== 'exported';
 
   return (
     <div style={{ padding: '0' }}>
@@ -97,6 +218,33 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
         </div>
       )}
 
+      {/* Potential Duplicate Warning */}
+      {duplicateCheckEvent && (
+        <div style={{
+          margin: '12px 24px 0',
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--severity-high-bg)',
+          border: '1px solid var(--severity-high)',
+          color: 'var(--severity-high)',
+          fontSize: 'var(--text-sm)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+            <AlertTriangle size={16} />
+            POTENTIAL DUPLICATE DETECTED
+          </div>
+          <p style={{ margin: 0, color: 'var(--ink)', fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>
+            This report is semantically identical (cosine similarity &gt; 85%) to existing Case{' '}
+            <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>
+              #{(duplicateCheckEvent.details as any)?.duplicate_case_id?.substring(0, 8).toUpperCase()}
+            </strong>.
+          </p>
+        </div>
+      )}
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr 320px',
@@ -126,8 +274,10 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-body">
               <NaranjoBreakdown
-                answers={caseData.naranjoAnswers}
-                totalScore={caseData.naranjoScore}
+                answers={naranjoAnswers}
+                totalScore={naranjoScore}
+                editable={isEditable}
+                onChange={handleNaranjoChange}
               />
             </div>
           </div>
@@ -135,7 +285,12 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
           {/* SNOMED Candidates */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-body">
-              <SnomedCandidateList candidates={caseData.snomedCandidates} />
+              <SnomedCandidateList
+                candidates={snomedCandidates}
+                editable={isEditable}
+                onSelect={handleSnomedSelect}
+                onAddCandidate={handleSnomedAdd}
+              />
             </div>
           </div>
 
@@ -145,7 +300,7 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
               <h3>Audit Trail</h3>
             </div>
             <div className="card-body">
-              <AuditTimeline entries={caseData.auditTrail} />
+              <AuditTimeline entries={auditTrail.length > 0 ? auditTrail : caseData.auditTrail} />
             </div>
           </div>
         </div>
@@ -155,8 +310,8 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
           {/* Causality Dial */}
           <div style={{ marginBottom: 20 }}>
             <CausalityDial
-              score={caseData.naranjoScore}
-              category={caseData.naranjoCategory}
+              score={naranjoScore}
+              category={naranjoCategory}
               size={200}
             />
           </div>
@@ -209,22 +364,42 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
                   </p>
                 </div>
 
-                {caseData.seriousness.length > 0 && (
-                  <div>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>Seriousness</span>
+                <div>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--ink-tertiary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>Seriousness</span>
+                  {isEditable ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                      {(['hospitalization', 'life_threatening', 'disability'] as const).map(flag => (
+                        <label key={flag} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={seriousness.includes(flag)}
+                            onChange={(e) => {
+                              const updated = e.target.checked
+                                ? [...seriousness, flag]
+                                : seriousness.filter(s => s !== flag);
+                              setSeriousness(updated);
+                              setOverrideMode(true);
+                            }}
+                            style={{ accentColor: 'var(--teal)' }}
+                          />
+                          <span style={{ textTransform: 'capitalize' }}>{flag.replace('_', ' ')}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                      {caseData.seriousness.map(s => (
+                      {seriousness.map(s => (
                         <Badge key={s} variant="custom" label={s.replace('_', ' ')} color="var(--severity-definite)" bgColor="var(--severity-definite-bg)" />
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Reviewer Actions */}
-          {caseData.status !== 'reviewed' && caseData.status !== 'closed' && (
+          {isEditable && (
             <div className="card">
               <div className="card-header">
                 <h3 style={{ fontSize: 'var(--text-sm)' }}>Reviewer Actions</h3>

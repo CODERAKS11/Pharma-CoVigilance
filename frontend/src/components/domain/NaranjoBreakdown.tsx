@@ -6,9 +6,28 @@ import type { NaranjoAnswer } from '../../api/types';
 interface NaranjoBreakdownProps {
   answers: NaranjoAnswer[];
   totalScore: number;
+  onChange?: (answers: NaranjoAnswer[]) => void;
+  editable?: boolean;
 }
 
-export function NaranjoBreakdown({ answers, totalScore }: NaranjoBreakdownProps) {
+function getQuestionScore(qId: number, answer: 'yes' | 'no' | 'unknown'): number {
+  if (answer === 'unknown') return 0;
+  if (answer === 'yes') {
+    if (qId === 2 || qId === 4) return 2;
+    if (qId === 5) return -1;
+    if (qId === 6) return -1;
+    return 1;
+  }
+  if (answer === 'no') {
+    if (qId === 2 || qId === 4) return -1;
+    if (qId === 5) return 2;
+    if (qId === 6) return 1;
+    return 0;
+  }
+  return 0;
+}
+
+export function NaranjoBreakdown({ answers, totalScore, onChange, editable = false }: NaranjoBreakdownProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const answerColor = (a: string) => {
@@ -67,17 +86,44 @@ export function NaranjoBreakdown({ answers, totalScore }: NaranjoBreakdownProps)
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--text-xs)',
-                fontWeight: 600,
-                color: answerColor(a.answer),
-                textTransform: 'uppercase',
-                minWidth: 48,
-                textAlign: 'center',
-              }}>
-                {a.answer}
-              </span>
+              {editable ? (
+                <select
+                  value={a.answer}
+                  onChange={(e) => {
+                    const newAns = e.target.value as 'yes' | 'no' | 'unknown';
+                    const newScore = getQuestionScore(a.questionId, newAns);
+                    const updated = [...answers];
+                    updated[i] = { ...a, answer: newAns, score: newScore };
+                    if (onChange) onChange(updated);
+                  }}
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    padding: '2px 4px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-surface)',
+                    color: 'var(--ink)',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="yes">YES</option>
+                  <option value="no">NO</option>
+                  <option value="unknown">UNKNOWN</option>
+                </select>
+              ) : (
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: 600,
+                  color: answerColor(a.answer),
+                  textTransform: 'uppercase',
+                  minWidth: 48,
+                  textAlign: 'center',
+                }}>
+                  {a.answer}
+                </span>
+              )}
               <span style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 'var(--text-xs)',

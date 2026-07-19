@@ -2,9 +2,25 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import { generateE2BXml, generatePvPIXml } from '../services/export';
+import { searchSnomed } from '../services/snomed';
 import { logger } from '../config/logger';
 
 const router = Router();
+
+// Mount SNOMED search route BEFORE global role-reviewer restrictions if needed, or keep it under same review rules
+router.get('/snomed/search', authMiddleware, requireRole(['reviewer', 'admin']), async (req: Request, res: Response) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string') {
+      return res.json([]);
+    }
+    const results = await searchSnomed(q);
+    return res.json(results);
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Failed to query SNOMED CT codes');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 const reviewConfirmSchema = z.object({
   seriousness: z.array(z.enum(['hospitalization', 'life_threatening', 'disability'])),
@@ -20,7 +36,8 @@ const reviewConfirmSchema = z.object({
     question: z.string(),
     answer: z.enum(['yes', 'no', 'unknown']),
     score: z.number()
-  }))
+  })),
+  overrideReason: z.string().optional()
 });
 
 // Enforce auth middleware globally on review endpoints
@@ -40,7 +57,7 @@ router.post('/:id/review/confirm', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid review payload', details: parseResult.error.errors });
     }
 
-    const { seriousness, snomedCandidates, naranjoAnswers } = parseResult.data;
+    const { seriousness, snomedCandidates, naranjoAnswers, overrideReason } = parseResult.data;
 
     // Fetch the original case to confirm visibility / tenant isolation
     const { data: caseRecord, error: caseErr } = await req.db
@@ -93,18 +110,20 @@ router.post('/:id/review/confirm', async (req: Request, res: Response) => {
     }
 
     // 4. Log review confirmation audit trail event
+    const actionName = overrideReason ? 'review_overridden' : 'review_confirmed';
     const { error: eventErr } = await req.db
       .from('case_events')
       .insert({
         case_id: id,
         actor_type: req.user?.role,
         actor_id: req.user?.id,
-        action: 'review_confirmed',
+        action: actionName,
         detail: {
           seriousness,
           snomed_candidates: confirmedCandidates,
           naranjo_score: naranjoScore,
-          naranjo_category: naranjoCategory
+          naranjo_category: naranjoCategory,
+          override_reason: overrideReason
         }
       });
 
@@ -116,6 +135,60 @@ router.post('/:id/review/confirm', async (req: Request, res: Response) => {
     return res.json({ message: 'Case successfully reviewed and locked' });
   } catch (error: any) {
     logger.error({ error: error.message, id: req.params.id }, 'Unexpected error confirming case review');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /cases/:id/review/reject
+ * Rejects a case and updates its status to 'rejected'
+ */
+router.post('/:id/review/reject', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Fetch the original case to confirm visibility / tenant isolation
+    const { data: caseRecord, error: caseErr } = await req.db
+      .from('cases')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (caseErr || !caseRecord) {
+      logger.warn({ id, caseErr }, 'Case not found for rejection');
+      return res.status(404).json({ error: 'Case not found or access denied' });
+    }
+
+    // Update status to rejected
+    const { error: updateErr } = await req.db
+      .from('cases')
+      .update({ status: 'rejected' })
+      .eq('id', id);
+
+    if (updateErr) {
+      logger.error({ error: updateErr.message, id }, 'Failed to reject case');
+      return res.status(500).json({ error: updateErr.message });
+    }
+
+    // Insert audit event
+    const { error: eventErr } = await req.db
+      .from('case_events')
+      .insert({
+        case_id: id,
+        actor_type: req.user?.role,
+        actor_id: req.user?.id,
+        action: 'review_rejected',
+        detail: { comments: 'Case rejected by reviewer' }
+      });
+
+    if (eventErr) {
+      logger.error({ error: eventErr.message }, 'Failed to record rejection event');
+    }
+
+    logger.info({ id, userId: req.user?.id }, 'Case successfully rejected');
+    return res.json({ message: 'Case successfully rejected' });
+  } catch (error: any) {
+    logger.error({ error: error.message, id: req.params.id }, 'Unexpected error rejecting case');
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
