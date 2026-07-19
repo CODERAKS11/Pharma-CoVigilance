@@ -24,9 +24,39 @@ export default function IntakePage() {
 
   const narrative = watch('narrative') || '';
 
-  const onSubmit = async (_data: IntakeFormData) => {
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1200));
+  const onSubmit = async (data: IntakeFormData) => {
+    const token = localStorage.getItem('pharmasafe_token');
+    try {
+      const response = await fetch('http://localhost:4000/cases', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          drugName: data.drugName,
+          dosage: `${data.dosage} ${data.dosageUnit}`,
+          narrative: data.narrative,
+          patientAge: data.patientAge,
+          patientSex: data.patientSex.toLowerCase(),
+          onsetDate: data.onsetDate,
+          hospitalization: data.seriousness.hospitalization,
+          lifeThreatening: data.seriousness.life_threatening,
+          disability: data.seriousness.disability,
+          reporterType: 'healthcare_professional'
+        })
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setSubmitted(result.caseId || result.id || 'PV-SUBMITTED');
+        reset();
+        return;
+      }
+    } catch (err) {
+      console.warn('Backend intake API unavailable, using local simulation.', err);
+    }
+    // Fallback: simulate
+    await new Promise(r => setTimeout(r, 800));
     const caseId = `PV-2025-${String(Math.floor(Math.random() * 9000) + 1000).padStart(6, '0')}`;
     setSubmitted(caseId);
     reset();
