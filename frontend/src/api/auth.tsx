@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { User, UserRole } from './types';
+import type { User } from './types';
 import { API_BASE_URL } from '../config';
 
 interface AuthContextType {
@@ -12,31 +12,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-
-// Mock users for demo
-const MOCK_USERS: Record<string, User & { password: string }> = {
-  'reviewer@pharmasafe.io': {
-    id: 'usr-001',
-    email: 'reviewer@pharmasafe.io',
-    name: 'Dr. Sarah Chen',
-    role: 'Reviewer' as UserRole,
-    password: 'reviewer123',
-  },
-  'admin@pharmasafe.io': {
-    id: 'usr-002',
-    email: 'admin@pharmasafe.io',
-    name: 'Admin User',
-    role: 'Admin' as UserRole,
-    password: 'admin123',
-  },
-  'reporter@pharmasafe.io': {
-    id: 'usr-003',
-    email: 'reporter@pharmasafe.io',
-    name: 'Dr. Emily Richards',
-    role: 'Reporter' as UserRole,
-    password: 'reporter123',
-  },
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
@@ -57,40 +32,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password })
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const normalizedUser = {
-          ...data.user,
-          role: data.user.role === 'reporter' ? 'Reporter' :
-                data.user.role === 'reviewer' ? 'Reviewer' :
-                data.user.role === 'admin' ? 'Admin' :
-                data.user.role
-        };
-        setUser(normalizedUser);
-        localStorage.setItem('pharmasafe_user', JSON.stringify(normalizedUser));
-        localStorage.setItem('pharmasafe_token', data.token);
-        setLoading(false);
-        return;
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Invalid email or password.');
       }
-    } catch (e) {
-      console.warn('Real Auth Backend API unavailable, falling back to mock mode authentication.');
-    }
 
-    // Simulate network delay
-    await new Promise(r => setTimeout(r, 800));
-
-    const mockUser = MOCK_USERS[email.toLowerCase()];
-    if (!mockUser || mockUser.password !== password) {
+      const data = await response.json();
+      const normalizedUser = {
+        ...data.user,
+        role: data.user.role === 'reporter' ? 'Reporter' :
+              data.user.role === 'reviewer' ? 'Reviewer' :
+              data.user.role === 'admin' ? 'Admin' :
+              data.user.role
+      };
+      setUser(normalizedUser);
+      localStorage.setItem('pharmasafe_user', JSON.stringify(normalizedUser));
+      localStorage.setItem('pharmasafe_token', data.token);
       setLoading(false);
-      setError('Invalid email or password. Please check your credentials and try again.');
-      throw new Error('Invalid credentials');
+    } catch (e: any) {
+      const message = e?.message || 'Unable to sign in with Supabase. Please try again.';
+      setLoading(false);
+      setError(message);
+      throw e;
     }
-
-    const { password: _, ...userData } = mockUser;
-    setUser(userData);
-    localStorage.setItem('pharmasafe_user', JSON.stringify(userData));
-    localStorage.setItem('pharmasafe_token', 'mock-offline-token');
-    setLoading(false);
   }, []);
 
   const logout = useCallback(() => {

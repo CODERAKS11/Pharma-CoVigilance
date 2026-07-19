@@ -23,11 +23,15 @@ export interface FilterState {
 const STATUS_OPTIONS: { value: CaseStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
   { value: 'new', label: 'New' },
+  { value: 'intake', label: 'Intake' },
   { value: 'processing', label: 'Processing' },
   { value: 'triaged', label: 'Triaged' },
   { value: 'under_review', label: 'Under Review' },
+  { value: 'needs_review', label: 'Needs Review' },
   { value: 'reviewed', label: 'Reviewed' },
   { value: 'closed', label: 'Closed' },
+  { value: 'exported', label: 'Exported' },
+  { value: 'rejected', label: 'Rejected' },
 ];
 
 const PRIORITY_OPTIONS: { value: Priority | ''; label: string }[] = [

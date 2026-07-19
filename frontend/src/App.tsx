@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './api/auth';
 import { RequireRole, getDefaultRoute } from './routes/RequireRole';
 import LoginPage from './pages/Login';
 import IntakePage from './pages/Intake';
+import MyCasesPage from './pages/MyCases';
 import QueuePage from './pages/Queue';
 import DashboardPage from './pages/Dashboard';
 import ExportsPage from './pages/Exports';
@@ -35,6 +36,7 @@ function AppContent() {
   }
 
   const navItems: NavItem[] = [
+    { to: '/my-cases', icon: <FileText size={18} />, label: 'My Cases', roles: ['Reporter'] },
     { to: '/queue', icon: <ClipboardList size={18} />, label: 'Case Queue', roles: ['Reviewer', 'Admin'] },
     { to: '/intake', icon: <Upload size={18} />, label: 'Report Event', roles: ['Reporter', 'Admin'] },
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard', roles: ['Admin', 'Reviewer'] },
@@ -117,6 +119,11 @@ function AppContent() {
             <Route path="/intake" element={
               <RequireRole allowed={['Reporter', 'Admin']}>
                 <IntakePage />
+              </RequireRole>
+            } />
+            <Route path="/my-cases" element={
+              <RequireRole allowed={['Reporter']}>
+                <MyCasesPage />
               </RequireRole>
             } />
             <Route path="/dashboard" element={

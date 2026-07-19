@@ -189,12 +189,13 @@ describe('PharmaSafe Phase 2 - Core AI Pipeline Tests', () => {
       expect(caseRecord?.priority).toBe('high'); // Updated by triage
 
       // 5. Verify audit logs are created
-      expect(caseEventsTable.length).toBe(6);
+      expect(caseEventsTable.length).toBe(7);
       
       const actions = caseEventsTable.map(e => e.action);
       expect(actions).toContain('validity_checked');
       expect(actions).toContain('duplicate_checked');
       expect(actions).toContain('triage_prioritized');
+      expect(actions).toContain('fields_extracted');
       expect(actions).toContain('causality_evaluated');
       expect(actions).toContain('coding_completed');
       expect(actions).toContain('narrative_drafted');

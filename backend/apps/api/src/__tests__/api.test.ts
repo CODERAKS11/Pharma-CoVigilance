@@ -137,12 +137,14 @@ describe('PharmaSafe Phase 1 API Integration Tests', () => {
       caseIdB = resB.body.caseId;
     });
 
-    it('should prevent reporters from listing cases (403)', async () => {
+    it('should allow reporters to list only their own cases', async () => {
       const res = await request(app)
         .get('/cases')
         .set('Authorization', `Bearer ${reporterAToken}`);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body.cases).toHaveLength(1);
+      expect(res.body.cases[0].reporter_id).toBe('55555555-5555-5555-5555-555555555555');
     });
 
     it('should allow reviewers to list all cases in their tenant', async () => {

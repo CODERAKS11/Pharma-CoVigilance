@@ -3,7 +3,8 @@ import IORedis from 'ioredis';
 import { EventEmitter } from 'events';
 import { supabaseService } from '../config/supabase';
 import { generateEmbedding, upsertCaseVector, findDuplicateCase } from './dedup';
-import { evaluateNaranjo } from './naranjo';
+import { scoreNaranjoAnalysis } from './naranjo';
+import { extractNarrativeSignals } from './extraction';
 import { searchSnomed } from './snomed';
 import { generateNarrativeDraft } from './narrative';
 import { logger } from '../config/logger';
@@ -22,12 +23,20 @@ const mockQueueEmitter = new MockQueueEmitter();
  * Automatically falls back to in-memory event-driven processing if Redis is unavailable.
  */
 export async function initQueue() {
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-
   if (process.env.NODE_ENV === 'test') {
     useMockQueue = true;
+    mockQueueEmitter.on('enqueue', async (caseId: string) => {
+      logger.info({ caseId }, 'In-memory Mock Queue executing job');
+      try {
+        await processCasePipeline(caseId);
+      } catch (err: any) {
+        logger.error({ caseId, error: err.message }, 'In-memory job processing failed');
+      }
+    });
     return;
   }
+
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
   if (redisUrl === 'mock' || redisUrl.startsWith('redis://localhost')) {
     try {
@@ -100,11 +109,6 @@ export async function initQueue() {
  */
 export async function enqueueCaseJob(caseId: string): Promise<void> {
   if (useMockQueue) {
-    if (process.env.NODE_ENV === 'test') {
-      await processCasePipeline(caseId);
-      return;
-    }
-
     // Push task execution to next tick to run asynchronously
     process.nextTick(() => {
       mockQueueEmitter.emit('enqueue', caseId);
@@ -193,8 +197,15 @@ async function processCasePipeline(caseId: string): Promise<void> {
 
   // --- ZONE 4: TRIAGE PRIORITIZATION ---
   logger.info({ caseId }, 'Zone 4: Running triage rules');
-  const isSeriousnessTrue = caseRecord.hospitalization || caseRecord.life_threatening || caseRecord.disability;
-  const priority = isSeriousnessTrue ? 'high' : 'medium';
+  const seriousnessScore =
+    (caseRecord.hospitalization ? 2 : 0) +
+    (caseRecord.life_threatening ? 3 : 0) +
+    (caseRecord.disability ? 1 : 0);
+
+  let priority: 'low' | 'medium' | 'high' | 'critical' = 'low';
+  if (caseRecord.life_threatening && (caseRecord.hospitalization || caseRecord.disability)) priority = 'critical';
+  else if (caseRecord.hospitalization || caseRecord.life_threatening) priority = 'high';
+  else if (caseRecord.disability) priority = 'medium';
 
   await supabaseService
     .from('cases')
@@ -207,12 +218,29 @@ async function processCasePipeline(caseId: string): Promise<void> {
       case_id: caseId,
       actor_type: 'system',
       action: 'triage_prioritized',
-      detail: { priority }
+      detail: { priority, seriousnessScore, hospitalization: !!caseRecord.hospitalization, life_threatening: !!caseRecord.life_threatening, disability: !!caseRecord.disability }
     });
 
-  // --- ZONE 5: CAUSALITY EVALUATION (Naranjo) ---
-  logger.info({ caseId }, 'Zone 5: Evaluating Naranjo causality score');
-  const naranjoRes = await evaluateNaranjo(narrative, onsetDate);
+  // --- ZONE 5: EXTRACTION ---
+  logger.info({ caseId }, 'Zone 5: Extracting narrative signal fields');
+  const extractionResult = await extractNarrativeSignals(narrative, onsetDate);
+
+  await supabaseService
+    .from('case_events')
+    .insert({
+      case_id: caseId,
+      actor_type: 'ai_pipeline',
+      action: 'fields_extracted',
+      detail: {
+        grounded: extractionResult.grounded,
+        selfConsistent: extractionResult.selfConsistent,
+        extracted_fields: extractionResult.data
+      }
+    });
+
+  // --- ZONE 6: CAUSALITY EVALUATION (Naranjo) ---
+  logger.info({ caseId }, 'Zone 6: Evaluating Naranjo causality score');
+  const naranjoRes = scoreNaranjoAnalysis(extractionResult.data, extractionResult.grounded, extractionResult.selfConsistent);
 
   // Write Naranjo results directly to case columns
   await supabaseService
@@ -240,8 +268,8 @@ async function processCasePipeline(caseId: string): Promise<void> {
       }
     });
 
-  // --- ZONE 5B: SNOMED CT CODING MATCHING ENGINE ---
-  logger.info({ caseId }, 'Zone 5B: Running SNOMED CT symptom coding matcher');
+  // --- ZONE 7: SNOMED CT CODING MATCHING ENGINE ---
+  logger.info({ caseId }, 'Zone 7: Running SNOMED CT symptom coding matcher');
   const snomedCandidates = await searchSnomed(narrative);
   await supabaseService
     .from('cases')
@@ -257,8 +285,8 @@ async function processCasePipeline(caseId: string): Promise<void> {
       detail: { snomed_candidates: snomedCandidates }
     });
 
-  // --- ZONE 6: NARRATIVE SUMMARY DRAFT ZONE ---
-  logger.info({ caseId }, 'Zone 6: Generating AI narrative case summary draft');
+  // --- ZONE 8: NARRATIVE SUMMARY DRAFT ZONE ---
+  logger.info({ caseId }, 'Zone 8: Generating AI narrative case summary draft');
   const aiSummary = await generateNarrativeDraft({
     patientAge: caseRecord.patient?.age,
     patientSex: caseRecord.patient?.sex || 'unknown',
@@ -285,9 +313,9 @@ async function processCasePipeline(caseId: string): Promise<void> {
     });
 
   // Determine target status
-  // If duplicate, selfConsistency fails, or groundedness fails, set to needs_review
-  // Otherwise, complete to triaged/reviewed
-  let nextStatus = 'triaged';
+  // If duplicate, selfConsistency fails, or groundedness fails, set to needs_review.
+  // Otherwise use severity-derived triage buckets.
+  let nextStatus: 'triaged' | 'needs_review' = 'triaged';
   if (isDuplicate || !naranjoRes.grounded || !naranjoRes.selfConsistent) {
     nextStatus = 'needs_review';
   }

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import '../../styles/queue.css';
 import { DataTable } from '../../components/ui/DataTable';
 import { Badge } from '../../components/ui/Badge';
@@ -8,8 +9,11 @@ import { formatDate, formatTimeAgo } from '../../lib/formatters';
 import type { CaseRecord } from '../../api/types';
 import CaseDetail from '../CaseDetail';
 import { API_BASE_URL } from '../../config';
+import { useAuth } from '../../api/auth';
 
 export default function QueuePage() {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [filters, setFilters] = useState<FilterState>({ search: '', status: '', priority: '', dateFrom: '', dateTo: '' });
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -22,6 +26,11 @@ export default function QueuePage() {
           'Authorization': `Bearer ${token}`
         }
       });
+      if (response.status === 401) {
+        logout();
+        navigate('/login', { replace: true });
+        return;
+      }
       if (response.ok) {
         const raw = await response.json();
         // Extract the cases array from backend wrapper response { cases, page, pageSize }

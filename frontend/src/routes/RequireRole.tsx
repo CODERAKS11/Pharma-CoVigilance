@@ -26,7 +26,7 @@ export function RequireRole({ allowed, children }: RequireRoleProps) {
 
 export function getDefaultRoute(role: UserRole): string {
   switch (role) {
-    case 'Reporter': return '/intake';
+    case 'Reporter': return '/my-cases';
     case 'Reviewer': return '/queue';
     case 'Admin': return '/dashboard';
   }

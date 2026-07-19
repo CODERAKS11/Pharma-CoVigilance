@@ -14,6 +14,22 @@ const ACTOR_ICON: Record<string, React.ReactNode> = {
   Admin: <Shield size={14} />,
 };
 
+function formatDetails(details: unknown): string {
+  if (details == null) return '';
+  if (typeof details === 'string') return details;
+  if (typeof details === 'number' || typeof details === 'boolean') return String(details);
+  if (Array.isArray(details)) {
+    return details.map(formatDetails).filter(Boolean).join(', ');
+  }
+  if (typeof details === 'object') {
+    return Object.entries(details)
+      .map(([key, value]) => `${key.replace(/_/g, ' ')}: ${formatDetails(value)}`)
+      .filter(Boolean)
+      .join(' | ');
+  }
+  return String(details);
+}
+
 export function AuditTimeline({ entries, showCaseId = false }: AuditTimelineProps) {
   if (entries.length === 0) {
     return (
@@ -38,6 +54,7 @@ export function AuditTimeline({ entries, showCaseId = false }: AuditTimelineProp
       {entries.map((entry, i) => {
         const isAI = entry.actorType === 'AI Pipeline';
         const isSystem = entry.actorType === 'System';
+        const detailsText = formatDetails(entry.details);
 
         return (
           <div key={entry.id || i} style={{
@@ -100,14 +117,14 @@ export function AuditTimeline({ entries, showCaseId = false }: AuditTimelineProp
               }}>
                 {entry.action}
               </p>
-              {entry.details && (
+              {detailsText && (
                 <p style={{
                   fontSize: 'var(--text-xs)',
                   color: 'var(--ink-secondary)',
                   marginTop: 2,
                   fontStyle: 'italic',
                 }}>
-                  {entry.details}
+                  {detailsText}
                 </p>
               )}
             </div>

@@ -72,6 +72,7 @@ export const tenantsTable: Tenant[] = [
 
 export const appUsersTable: AppUser[] = [
   { id: '55555555-5555-5555-5555-555555555555', tenant_id: 'de000000-0000-0000-0000-000000000001', role: 'reporter', full_name: 'Dr. Emily Richards', created_at: new Date() },
+  { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', tenant_id: 'de000000-0000-0000-0000-000000000001', role: 'reporter', full_name: 'Dr. Alex Morgan', created_at: new Date() },
   { id: '66666666-6666-6666-6666-666666666666', tenant_id: 'de000000-0000-0000-0000-000000000001', role: 'reviewer', full_name: 'Dr. Sarah Chen', created_at: new Date() },
   { id: '77777777-7777-7777-7777-777777777777', tenant_id: 'de000000-0000-0000-0000-000000000001', role: 'admin', full_name: 'Admin User', created_at: new Date() }
 ];

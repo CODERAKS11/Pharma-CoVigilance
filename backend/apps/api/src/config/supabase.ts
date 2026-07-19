@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import ws from 'ws';
 import { MockSupabaseQueryBuilder, mockRpc } from './mockDb';
@@ -11,17 +12,98 @@ if (typeof globalThis.WebSocket === 'undefined') {
 
 dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-export const isSupabaseConfigured = 
-  process.env.NODE_ENV !== 'test' &&
+function assertSupabaseConfigured() {
+  const missingVariables = [
+    !supabaseUrl ? 'SUPABASE_URL' : null,
+    !supabaseAnonKey ? 'SUPABASE_ANON_KEY' : null,
+    !supabaseServiceKey ? 'SUPABASE_SERVICE_ROLE_KEY' : null
+  ].filter((value): value is string => value !== null);
+
+  if (missingVariables.length > 0) {
+    throw new Error(`Supabase environment variables are required: ${missingVariables.join(', ')}`);
+  }
+}
+
+if (!isTestEnvironment) {
+  assertSupabaseConfigured();
+}
+
+export const isSupabaseConfigured = isTestEnvironment || 
   supabaseUrl && 
   supabaseAnonKey && 
   supabaseServiceKey && 
-  supabaseUrl !== 'mock' &&
-  !supabaseUrl.startsWith('http://localhost'); // Force mock if localhost and not explicitly running local supabase emulator
+  supabaseUrl !== 'mock';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-secret-key-at-least-32-characters-long';
+const TEST_TENANT_ID = 'de000000-0000-0000-0000-000000000001';
+const TEST_USERS = [
+  { id: '55555555-5555-5555-5555-555555555555', email: 'reporter@pharmasafe.io', password: 'reporter123', name: 'Dr. Emily Richards', role: 'reporter' },
+  { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', email: 'reporter-b@pharmasafe.io', password: 'reporterb123', name: 'Dr. Alex Morgan', role: 'reporter' },
+  { id: '66666666-6666-6666-6666-666666666666', email: 'reviewer@pharmasafe.io', password: 'reviewer123', name: 'Dr. Sarah Chen', role: 'reviewer' },
+  { id: '77777777-7777-7777-7777-777777777777', email: 'admin@pharmasafe.io', password: 'admin123', name: 'Admin User', role: 'admin' }
+] as const;
+
+function createMockAuthClient() {
+  return {
+    async getUser(token: string) {
+      try {
+        const payload = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string; tenantId: string };
+        return {
+          data: {
+            user: {
+              id: payload.id,
+              email: payload.email,
+              user_metadata: { role: payload.role, tenantId: payload.tenantId }
+            }
+          },
+          error: null
+        };
+      } catch (error: any) {
+        return {
+          data: { user: null },
+          error
+        };
+      }
+    },
+    async signInWithPassword({ email, password }: { email: string; password: string }) {
+      const user = TEST_USERS.find(candidate => candidate.email === email && candidate.password === password);
+
+      if (!user) {
+        return {
+          data: { user: null, session: null },
+          error: new Error('Invalid email or password')
+        };
+      }
+
+      const accessToken = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, tenantId: TEST_TENANT_ID },
+        JWT_SECRET
+      );
+
+      return {
+        data: {
+          user: { id: user.id, email: user.email },
+          session: { access_token: accessToken }
+        },
+        error: null
+      };
+    }
+  };
+}
+
+function createMockSupabaseClient(userContext?: { id: string; role: any; tenantId: string }) {
+  return {
+    from: (table: string) => new MockSupabaseQueryBuilder(table, userContext),
+    rpc: (functionName: string, params: any) => mockRpc(functionName, params),
+    auth: createMockAuthClient()
+  };
+}
 
 // Real singleton service role client
 export const realSupabaseService = isSupabaseConfigured
@@ -34,16 +116,17 @@ export const realSupabaseService = isSupabaseConfigured
   : null;
 
 // Mock service role client wrapper
-export const mockSupabaseService = {
-  from: (table: string) => new MockSupabaseQueryBuilder(table),
-  rpc: (functionName: string, params: any) => mockRpc(functionName, params)
-};
+export const mockSupabaseService = createMockSupabaseClient();
 
-// Exported service client (switches based on configuration status)
-export const supabaseService: any = isSupabaseConfigured ? realSupabaseService : mockSupabaseService;
+// Exported service client.
+export const supabaseService: any = isTestEnvironment ? mockSupabaseService : realSupabaseService;
 
 // Function to build request-scoped clients
 export function createRequestClient(token: string, userContext?: { id: string; role: any; tenantId: string }) {
+  if (isTestEnvironment) {
+    return createMockSupabaseClient(userContext);
+  }
+
   if (isSupabaseConfigured) {
     return createClient(supabaseUrl, supabaseAnonKey, {
       global: {
@@ -56,11 +139,7 @@ export function createRequestClient(token: string, userContext?: { id: string; r
         autoRefreshToken: false
       }
     });
-  } else {
-    // Return a mock scoped client that encapsulates user context for simulating RLS
-    return {
-      from: (table: string) => new MockSupabaseQueryBuilder(table, userContext),
-      rpc: (functionName: string, params: any) => mockRpc(functionName, params, userContext)
-    };
   }
+
+  throw new Error('Supabase is not configured');
 }

@@ -36,6 +36,54 @@ export interface NaranjoEvaluationResult {
   selfConsistent: boolean;
 }
 
+export function scoreNaranjoAnalysis(
+  analysis: any,
+  grounded: boolean,
+  selfConsistent: boolean
+): NaranjoEvaluationResult {
+  const answers: NaranjoEvaluationResult['answers'] = [];
+
+  const q1Score = analysis.conclusiveReports === 'yes' ? 1 : 0;
+  answers.push({ questionId: 1, question: NARANJO_QUESTIONS[0].text, answer: analysis.conclusiveReports, score: q1Score, supportingQuote: analysis.conclusiveReportsQuote });
+
+  const q2Score = analysis.onsetAfterDrug === 'yes' ? 2 : (analysis.onsetAfterDrug === 'no' ? -1 : 0);
+  answers.push({ questionId: 2, question: NARANJO_QUESTIONS[1].text, answer: analysis.onsetAfterDrug, score: q2Score, supportingQuote: analysis.onsetAfterDrugQuote });
+
+  const q3Score = analysis.improvedOnDechallenge === 'yes' ? 1 : 0;
+  answers.push({ questionId: 3, question: NARANJO_QUESTIONS[2].text, answer: analysis.improvedOnDechallenge, score: q3Score, supportingQuote: analysis.improvedOnDechallengeQuote });
+
+  const q4Score = analysis.reappearedOnRechallenge === 'yes' ? 2 : (analysis.reappearedOnRechallenge === 'no' ? -1 : 0);
+  answers.push({ questionId: 4, question: NARANJO_QUESTIONS[3].text, answer: analysis.reappearedOnRechallenge, score: q4Score, supportingQuote: analysis.reappearedOnRechallengeQuote });
+
+  const q5Score = analysis.alternativeCauses === 'yes' ? -1 : (analysis.alternativeCauses === 'no' ? 2 : 0);
+  answers.push({ questionId: 5, question: NARANJO_QUESTIONS[4].text, answer: analysis.alternativeCauses, score: q5Score, supportingQuote: analysis.alternativeCausesQuote });
+
+  answers.push({ questionId: 6, question: NARANJO_QUESTIONS[5].text, answer: 'unknown', score: 0 });
+  answers.push({ questionId: 7, question: NARANJO_QUESTIONS[6].text, answer: 'unknown', score: 0 });
+  answers.push({ questionId: 8, question: NARANJO_QUESTIONS[7].text, answer: 'unknown', score: 0 });
+
+  const q9Score = analysis.similarReactionPrevious === 'yes' ? 1 : 0;
+  answers.push({ questionId: 9, question: NARANJO_QUESTIONS[8].text, answer: analysis.similarReactionPrevious, score: q9Score, supportingQuote: analysis.similarReactionPreviousQuote });
+
+  const q10Score = analysis.objectiveEvidence === 'yes' ? 1 : 0;
+  answers.push({ questionId: 10, question: NARANJO_QUESTIONS[9].text, answer: analysis.objectiveEvidence, score: q10Score, supportingQuote: analysis.objectiveEvidenceQuote });
+
+  const totalScore = answers.reduce((sum, item) => sum + item.score, 0);
+
+  let category: NaranjoEvaluationResult['category'] = 'Doubtful';
+  if (totalScore >= 9) category = 'Definite';
+  else if (totalScore >= 5) category = 'Probable';
+  else if (totalScore >= 1) category = 'Possible';
+
+  return {
+    score: totalScore,
+    category,
+    answers,
+    grounded,
+    selfConsistent
+  };
+}
+
 const NARANJO_QUESTIONS = [
   { id: 1, text: 'Are there previous conclusive reports on this reaction?' },
   { id: 2, text: 'Did the adverse event appear after the suspected drug was administered?' },
@@ -79,59 +127,5 @@ Provide the exact text quote from the narrative that justifies each answer in th
     temperature: 0.1
   });
 
-  const analysis = aiResult.data;
-
-  // 2. Score mapping
-  const answers: NaranjoEvaluationResult['answers'] = [];
-
-  // Q1: Conclusive reports (Yes = +1, No = 0, Unknown = 0)
-  const q1Score = analysis.conclusiveReports === 'yes' ? 1 : 0;
-  answers.push({ questionId: 1, question: NARANJO_QUESTIONS[0].text, answer: analysis.conclusiveReports, score: q1Score, supportingQuote: analysis.conclusiveReportsQuote });
-
-  // Q2: Onset after drug (Yes = +2, No = -1, Unknown = 0)
-  const q2Score = analysis.onsetAfterDrug === 'yes' ? 2 : (analysis.onsetAfterDrug === 'no' ? -1 : 0);
-  answers.push({ questionId: 2, question: NARANJO_QUESTIONS[1].text, answer: analysis.onsetAfterDrug, score: q2Score, supportingQuote: analysis.onsetAfterDrugQuote });
-
-  // Q3: Dechallenge improvement (Yes = +1, No = 0, Unknown = 0)
-  const q3Score = analysis.improvedOnDechallenge === 'yes' ? 1 : 0;
-  answers.push({ questionId: 3, question: NARANJO_QUESTIONS[2].text, answer: analysis.improvedOnDechallenge, score: q3Score, supportingQuote: analysis.improvedOnDechallengeQuote });
-
-  // Q4: Rechallenge (Yes = +2, No = -1, Unknown = 0)
-  const q4Score = analysis.reappearedOnRechallenge === 'yes' ? 2 : (analysis.reappearedOnRechallenge === 'no' ? -1 : 0);
-  answers.push({ questionId: 4, question: NARANJO_QUESTIONS[3].text, answer: analysis.reappearedOnRechallenge, score: q4Score, supportingQuote: analysis.reappearedOnRechallengeQuote });
-
-  // Q5: Alternative causes (Yes = -1, No = +2, Unknown = 0)
-  const q5Score = analysis.alternativeCauses === 'yes' ? -1 : (analysis.alternativeCauses === 'no' ? 2 : 0);
-  answers.push({ questionId: 5, question: NARANJO_QUESTIONS[4].text, answer: analysis.alternativeCauses, score: q5Score, supportingQuote: analysis.alternativeCausesQuote });
-
-  // Q6-Q8: Typically require clinical measurements, default to unknown in general narrative unless explicitly stated.
-  // We model them as 'unknown' for this automation phase.
-  answers.push({ questionId: 6, question: NARANJO_QUESTIONS[5].text, answer: 'unknown', score: 0 });
-  answers.push({ questionId: 7, question: NARANJO_QUESTIONS[6].text, answer: 'unknown', score: 0 });
-  answers.push({ questionId: 8, question: NARANJO_QUESTIONS[7].text, answer: 'unknown', score: 0 });
-
-  // Q9: Similar reaction previous (Yes = +1, No = 0, Unknown = 0)
-  const q9Score = analysis.similarReactionPrevious === 'yes' ? 1 : 0;
-  answers.push({ questionId: 9, question: NARANJO_QUESTIONS[8].text, answer: analysis.similarReactionPrevious, score: q9Score, supportingQuote: analysis.similarReactionPreviousQuote });
-
-  // Q10: Objective evidence confirmation (Yes = +1, No = 0, Unknown = 0)
-  const q10Score = analysis.objectiveEvidence === 'yes' ? 1 : 0;
-  answers.push({ questionId: 10, question: NARANJO_QUESTIONS[9].text, answer: analysis.objectiveEvidence, score: q10Score, supportingQuote: analysis.objectiveEvidenceQuote });
-
-  // Calculate Total Score
-  const totalScore = answers.reduce((sum, item) => sum + item.score, 0);
-
-  // Determine Category
-  let category: NaranjoEvaluationResult['category'] = 'Doubtful';
-  if (totalScore >= 9) category = 'Definite';
-  else if (totalScore >= 5) category = 'Probable';
-  else if (totalScore >= 1) category = 'Possible';
-
-  return {
-    score: totalScore,
-    category,
-    answers,
-    grounded: aiResult.grounded,
-    selfConsistent: aiResult.selfConsistent
-  };
+  return scoreNaranjoAnalysis(aiResult.data, aiResult.grounded, aiResult.selfConsistent);
 }

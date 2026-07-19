@@ -3,10 +3,16 @@ import '../../styles/forms.css';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Shield, Eye, EyeOff, AlertCircle, Mail, Lock, Activity, Database, Cpu, ShieldCheck } from 'lucide-react';
+import { Shield, Eye, EyeOff, AlertCircle, Mail, Lock, Activity, Database, Cpu, ShieldCheck, BadgeInfo } from 'lucide-react';
 import { useAuth } from '../../api/auth';
 import { getDefaultRoute } from '../../routes/RequireRole';
 import { loginSchema, type LoginFormData } from '../../lib/schemas';
+
+const DEMO_CREDENTIALS = [
+  { role: 'Reporter', email: 'reporter@pharmasafe.io', password: 'reporter123' },
+  { role: 'Reviewer', email: 'reviewer@pharmasafe.io', password: 'reviewer123' },
+  { role: 'Admin', email: 'admin@pharmasafe.io', password: 'admin123' }
+];
 
 export default function LoginPage() {
   const { login, error: authError, loading } = useAuth();
@@ -15,6 +21,7 @@ export default function LoginPage() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -220,35 +227,35 @@ export default function LoginPage() {
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
-          </div>
 
-          {/* Demo credentials */}
-          <div className="demo-credentials">
-            <p style={{
-              fontSize: 'var(--text-xs)',
-              fontWeight: 600,
-              color: 'var(--indigo)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              marginBottom: 8,
-            }}>
-              Demo Credentials
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 'var(--text-xs)' }}>
-              {[
-                { role: 'Reviewer', email: 'reviewer@pharmasafe.io', pass: 'reviewer123' },
-                { role: 'Admin', email: 'admin@pharmasafe.io', pass: 'admin123' },
-                { role: 'Reporter', email: 'reporter@pharmasafe.io', pass: 'reporter123' },
-              ].map(c => (
-                <div key={c.role} style={{ display: 'flex', gap: 8, color: 'var(--ink-secondary)' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--ink)', minWidth: 60 }}>{c.role}:</span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>{c.email}</span>
-                  <span style={{ color: 'var(--ink-tertiary)' }}>/</span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>{c.pass}</span>
-                </div>
-              ))}
+            <div className="demo-credentials">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <BadgeInfo size={16} color="var(--indigo)" />
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--ink)' }}>
+                  Demo credentials
+                </span>
+              </div>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-secondary)', marginBottom: 12 }}>
+                Use any of the following accounts to sign in:
+              </p>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {DEMO_CREDENTIALS.map((credential) => (
+                  <div key={credential.role} style={{ display: 'grid', gap: 4 }}>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ink-tertiary)' }}>
+                      {credential.role}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>
+                      {credential.email}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>
+                      {credential.password}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

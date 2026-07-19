@@ -70,8 +70,8 @@ router.post('/', requireRole(['reporter', 'admin']), async (req: Request, res: R
   }
 });
 
-// GET /cases: List cases (Reviewers or Admins)
-router.get('/', requireRole(['reviewer', 'admin']), async (req: Request, res: Response) => {
+// GET /cases: List cases (Reporters see their own submissions via RLS; reviewers/admins see tenant cases)
+router.get('/', requireRole(['reporter', 'reviewer', 'admin']), async (req: Request, res: Response) => {
   try {
     const { status, priority, page = '1', pageSize = '10' } = req.query;
 

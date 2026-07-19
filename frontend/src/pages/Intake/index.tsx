@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../../config';
 
 export default function IntakePage() {
   const [submitted, setSubmitted] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { register, handleSubmit, control, formState: { errors, isSubmitting }, watch, reset } = useForm<IntakeFormData>({
     resolver: zodResolver(intakeSchema),
@@ -50,17 +51,17 @@ export default function IntakePage() {
       if (response.ok) {
         const result = await response.json();
         setSubmitted(result.caseId || result.id || 'PV-SUBMITTED');
+        setSubmitError(null);
         reset();
         return;
       }
+
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to submit report');
     } catch (err) {
-      console.warn('Backend intake API unavailable, using local simulation.', err);
+      setSubmitError(err instanceof Error ? err.message : 'Failed to submit report');
+      return;
     }
-    // Fallback: simulate
-    await new Promise(r => setTimeout(r, 800));
-    const caseId = `PV-2025-${String(Math.floor(Math.random() * 9000) + 1000).padStart(6, '0')}`;
-    setSubmitted(caseId);
-    reset();
   };
 
   if (submitted) {
@@ -122,6 +123,19 @@ export default function IntakePage() {
         <h2>Report Adverse Event</h2>
         <p>Submit a new adverse drug reaction report for processing and review</p>
       </div>
+
+      {submitError && (
+        <div style={{
+          marginBottom: 16,
+          padding: '12px 14px',
+          borderRadius: 'var(--radius-md)',
+          background: 'var(--error-bg)',
+          color: 'var(--error)',
+          fontSize: 'var(--text-sm)'
+        }}>
+          {submitError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <div style={{
