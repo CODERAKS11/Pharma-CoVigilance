@@ -6,7 +6,17 @@ import { resetMockDb, casesTable, patientsTable } from '../config/mockDb';
 describe('PharmaSafe Phase 3 - Coding & Triage Tests', () => {
   beforeEach(async () => {
     resetMockDb();
+    jest.spyOn(global, 'fetch').mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('qdrant.io')) {
+        return Promise.reject(new Error('Qdrant offline for test'));
+      }
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    });
     await initSnomed();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('SNOMED CT Matching Engine', () => {

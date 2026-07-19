@@ -1,9 +1,21 @@
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 import { generateEmbedding, upsertCaseVector } from '../../../apps/api/src/services/dedup';
 import { logger } from '../../../apps/api/src/config/logger';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
 const COLLECTION_NAME = 'snomed_findings';
 const VECTOR_SIZE = 1536;
+
+const getHeaders = (h: Record<string, string> = {}) => {
+  const headersObj = { ...h };
+  if (QDRANT_API_KEY) {
+    headersObj['api-key'] = QDRANT_API_KEY;
+  }
+  return headersObj;
+};
 
 export interface SnomedRecord {
   code: string;
@@ -62,25 +74,37 @@ async function seed() {
 
   let useMockQdrant = true;
   try {
-    const res = await fetch(`${QDRANT_URL}/collections`, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(`${QDRANT_URL}/collections`, {
+      headers: getHeaders(),
+      signal: AbortSignal.timeout(3000)
+    });
     if (res.ok) {
       useMockQdrant = false;
     }
   } catch {
-    logger.warn('Qdrant is offline. Skipping seeding vector collection (in-memory mock index will serve search requests)');
+    logger.warn('Qdrant is offline or connection failed. Skipping seeding vector collection (in-memory mock index will serve search requests)');
     return;
   }
 
   try {
     // Recreate Collection
-    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, { method: 'DELETE' });
+    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
     const createRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         vectors: {
           size: VECTOR_SIZE,
           distance: 'Cosine'
+        },
+        quantization_config: {
+          scalar: {
+            type: 'int8',
+            available_on_ram: true
+          }
         }
       })
     });
@@ -89,20 +113,43 @@ async function seed() {
       throw new Error(`Failed to create collection: ${await createRes.text()}`);
     }
 
-    logger.info(`Collection "${COLLECTION_NAME}" created. Upserting findings...`);
+    // Load parsed dictionary dynamically if it exists
+    let sourceDict: SnomedRecord[] = SNOMED_DICTIONARY;
+    try {
+      const rf2Module = require('./snomed-parsed-dictionary-dictionary');
+      if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
+        let parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+        
+        const limit = process.env.SEED_LIMIT ? parseInt(process.env.SEED_LIMIT, 10) : 2000;
+        if (parsed.length > limit) {
+          parsed = parsed.slice(0, limit);
+        }
+        
+        const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
+        sourceDict = [
+          ...SNOMED_DICTIONARY,
+          ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
+        ];
+        logger.info(`Loaded parsed RF2 dictionary. Merged core entries. Total: ${sourceDict.length}`);
+      }
+    } catch {
+      logger.info('Parsed RF2 dictionary file not found, using default dictionary.');
+    }
 
-    for (const rec of SNOMED_DICTIONARY) {
+    logger.info(`Collection "${COLLECTION_NAME}" created with int8 quantization. Upserting ${sourceDict.length} findings...`);
+
+    for (const rec of sourceDict) {
       // Create semantic vector based on preferred term + synonyms
       const textToEmbed = `${rec.term}. Synonyms: ${rec.synonyms.join(', ')}`;
       const vector = await generateEmbedding(textToEmbed);
 
       const upsertRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           points: [
             {
-              id: rec.code.padStart(36, '0'), // Pad code to standard UUID length/format
+              id: `00000000-0000-0000-0000-${rec.code.padStart(12, '0')}`, // Format as standard UUID with dashes
               vector,
               payload: {
                 code: rec.code,

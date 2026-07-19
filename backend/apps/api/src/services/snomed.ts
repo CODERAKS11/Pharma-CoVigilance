@@ -3,7 +3,31 @@ import { SNOMED_DICTIONARY, SnomedRecord } from '../../../../packages/db/scripts
 import { logger } from '../config/logger';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
 const COLLECTION_NAME = 'snomed_findings';
+
+const getHeaders = (h: Record<string, string> = {}) => {
+  const headersObj = { ...h };
+  if (QDRANT_API_KEY) {
+    headersObj['api-key'] = QDRANT_API_KEY;
+  }
+  return headersObj;
+};
+
+let activeDict: SnomedRecord[] = SNOMED_DICTIONARY;
+try {
+  const rf2Module = require('../../../../packages/db/scripts/snomed-parsed-dictionary-dictionary');
+  if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
+    const parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+    const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
+    activeDict = [
+      ...SNOMED_DICTIONARY,
+      ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
+    ];
+  }
+} catch {
+  // Fall back to SNOMED_DICTIONARY
+}
 
 let useMockSnomed = true;
 
@@ -20,7 +44,10 @@ export interface SnomedCandidate {
  */
 export async function initSnomed() {
   try {
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, { signal: AbortSignal.timeout(1000) });
+    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      headers: getHeaders(),
+      signal: AbortSignal.timeout(3000)
+    });
     if (res.ok) {
       useMockSnomed = false;
       logger.info('SNOMED coding engine successfully connected to Qdrant vector store.');
@@ -76,7 +103,7 @@ export async function searchSnomed(queryText: string): Promise<SnomedCandidate[]
 
   if (useMockSnomed) {
     // Pure lexical matching against in-memory dictionary
-    for (const record of SNOMED_DICTIONARY) {
+    for (const record of activeDict) {
       const lexScore = calculateLexicalScore(queryText, record);
       if (lexScore > 0.1) {
         candidates.push({
@@ -94,7 +121,7 @@ export async function searchSnomed(queryText: string): Promise<SnomedCandidate[]
       
       const searchRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           vector,
           limit: 5,
@@ -111,7 +138,7 @@ export async function searchSnomed(queryText: string): Promise<SnomedCandidate[]
           const vectorScore = match.score || 0.0; // Cosine similarity (0-1 approx range)
           
           // Combine with lexical score
-          const record = SNOMED_DICTIONARY.find((r: SnomedRecord) => r.code === payload.code);
+          const record = activeDict.find((r: SnomedRecord) => r.code === payload.code);
           const lexScore = record ? calculateLexicalScore(queryText, record) : 0.0;
 
           // Hybrid score tally

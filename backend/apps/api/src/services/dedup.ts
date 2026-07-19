@@ -2,8 +2,17 @@ import OpenAI from 'openai';
 import { logger } from '../config/logger';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+
+const getHeaders = (h: Record<string, string> = {}) => {
+  const headersObj = { ...h };
+  if (QDRANT_API_KEY) {
+    headersObj['api-key'] = QDRANT_API_KEY;
+  }
+  return headersObj;
+};
 
 const hasEmbeddingKey = OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key';
 
@@ -72,7 +81,10 @@ export async function initQdrant() {
   if (QDRANT_URL === 'mock' || QDRANT_URL.startsWith('http://localhost')) {
     // Let's probe if Qdrant is actually running locally
     try {
-      const res = await fetch(`${QDRANT_URL}/collections`, { signal: AbortSignal.timeout(1500) });
+      const res = await fetch(`${QDRANT_URL}/collections`, {
+        headers: getHeaders(),
+        signal: AbortSignal.timeout(1500)
+      });
       if (res.ok) {
         useMockQdrant = false;
         logger.info('Successfully connected to local Qdrant instance');
@@ -90,12 +102,14 @@ export async function initQdrant() {
   }
 
   try {
-    const checkRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`);
+    const checkRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      headers: getHeaders()
+    });
     if (checkRes.status === 404) {
       // Collection does not exist, create it
       const createRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           vectors: {
             size: VECTOR_SIZE,
@@ -137,7 +151,7 @@ export async function upsertCaseVector(
     // Qdrant allows string UUIDs for point IDs
     const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         points: [
           {
@@ -198,7 +212,7 @@ export async function findDuplicateCase(
   try {
     const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         vector,
         limit: 1,
