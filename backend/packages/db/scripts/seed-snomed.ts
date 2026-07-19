@@ -1,13 +1,13 @@
 import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config({ path: path.join(__dirname, '../../../.env') });
-import { generateEmbedding, upsertCaseVector } from '../../../apps/api/src/services/dedup';
+import { generateOllamaBatchEmbeddings } from '../../../apps/api/src/services/dedup';
 import { logger } from '../../../apps/api/src/config/logger';
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
 const COLLECTION_NAME = 'snomed_findings';
-const VECTOR_SIZE = 1536;
+const VECTOR_SIZE = 1024; // BAAI/bge-m3 via local Ollama
 
 const getHeaders = (h: Record<string, string> = {}) => {
   const headersObj = { ...h };
@@ -69,59 +69,91 @@ export const SNOMED_DICTIONARY: SnomedRecord[] = [
   { code: '419284004', term: 'Altered mental status', synonyms: ['mental confusion', 'delirium', 'cognitive impairment', 'disoriented'], semantic_tag: 'finding' },
 ];
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, options: RequestInit & { timeoutMs?: number }, retries = 5): Promise<Response> {
+  const { timeoutMs, ...restOptions } = options;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const fetchOpts: RequestInit = { ...restOptions };
+      if (timeoutMs) {
+        fetchOpts.signal = AbortSignal.timeout(timeoutMs);
+      }
+      const res = await fetch(url, fetchOpts);
+      return res;
+    } catch (err: any) {
+      if (attempt === retries) throw err;
+      logger.warn(`Network request to ${url} failed (attempt ${attempt}/${retries}). Retrying in ${attempt * 2}s... Error: ${err.message}`);
+      await sleep(attempt * 2000);
+    }
+  }
+  throw new Error(`Failed network request to ${url}`);
+}
+
 async function seed() {
-  logger.info('Initializing SNOMED CT Qdrant collection...');
+  logger.info({
+    QDRANT_URL,
+    QDRANT_API_KEY: QDRANT_API_KEY ? `${QDRANT_API_KEY.slice(0, 10)}...` : 'undefined',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY ? `${process.env.GEMINI_API_KEY.slice(0, 10)}...` : 'undefined',
+    SEED_LIMIT: process.env.SEED_LIMIT
+  }, 'Initializing SNOMED CT Qdrant collection...');
 
   let useMockQdrant = true;
   try {
-    const res = await fetch(`${QDRANT_URL}/collections`, {
+    const res = await fetchWithRetry(`${QDRANT_URL}/collections`, {
       headers: getHeaders(),
-      signal: AbortSignal.timeout(3000)
-    });
+      timeoutMs: 15000
+    }, 3);
     if (res.ok) {
       useMockQdrant = false;
     }
-  } catch {
-    logger.warn('Qdrant is offline or connection failed. Skipping seeding vector collection (in-memory mock index will serve search requests)');
+  } catch (err: any) {
+    logger.error({ error: err.message }, 'Qdrant Cloud connection failed after retries.');
     return;
   }
 
   try {
-    // Recreate Collection
-    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
-      method: 'DELETE',
+    // Check if collection exists
+    const checkRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
       headers: getHeaders()
     });
-    const createRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
-      method: 'PUT',
-      headers: getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        vectors: {
-          size: VECTOR_SIZE,
-          distance: 'Cosine'
-        },
-        quantization_config: {
-          scalar: {
-            type: 'int8',
-            available_on_ram: true
-          }
-        }
-      })
-    });
 
-    if (!createRes.ok) {
-      throw new Error(`Failed to create collection: ${await createRes.text()}`);
+    if (checkRes.status === 404) {
+      logger.info(`Creating collection "${COLLECTION_NAME}"...`);
+      const createRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+        method: 'PUT',
+        headers: getHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          vectors: {
+            size: VECTOR_SIZE,
+            distance: 'Cosine'
+          },
+          quantization_config: {
+            scalar: {
+              type: 'int8',
+              available_on_ram: true
+            }
+          }
+        })
+      });
+
+      if (!createRes.ok) {
+        throw new Error(`Failed to create collection: ${await createRes.text()}`);
+      }
     }
 
     // Load parsed dictionary dynamically if it exists
     let sourceDict: SnomedRecord[] = SNOMED_DICTIONARY;
     try {
-      const rf2Module = require('./snomed-parsed-dictionary-dictionary');
-      if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
-        let parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+      const fs = require('fs');
+      const jsonPath = path.join(__dirname, 'snomed-parsed-dictionary.json');
+      if (fs.existsSync(jsonPath)) {
+        logger.info('Loading parsed RF2 dictionary from JSON file...');
+        const fileContent = fs.readFileSync(jsonPath, 'utf-8');
+        let parsed = JSON.parse(fileContent) as SnomedRecord[];
         
         const limit = process.env.SEED_LIMIT ? parseInt(process.env.SEED_LIMIT, 10) : 2000;
-        if (parsed.length > limit) {
+        if (limit > 0 && parsed.length > limit) {
           parsed = parsed.slice(0, limit);
         }
         
@@ -130,50 +162,85 @@ async function seed() {
           ...SNOMED_DICTIONARY,
           ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
         ];
-        logger.info(`Loaded parsed RF2 dictionary. Merged core entries. Total: ${sourceDict.length}`);
+        logger.info(`Loaded parsed RF2 dictionary from JSON. Merged total: ${sourceDict.length}`);
+      } else {
+        const rf2Module = require('./snomed-parsed-dictionary-dictionary');
+        if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
+          let parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+          
+          const limit = process.env.SEED_LIMIT ? parseInt(process.env.SEED_LIMIT, 10) : 2000;
+          if (limit > 0 && parsed.length > limit) {
+            parsed = parsed.slice(0, limit);
+          }
+          
+          const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
+          sourceDict = [
+            ...SNOMED_DICTIONARY,
+            ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
+          ];
+          logger.info(`Loaded parsed RF2 dictionary from TS. Merged total: ${sourceDict.length}`);
+        }
       }
-    } catch {
-      logger.info('Parsed RF2 dictionary file not found, using default dictionary.');
+    } catch (err: any) {
+      logger.warn(`Failed to load parsed RF2 dictionary: ${err.message}. Using default dictionary.`);
     }
 
-    logger.info(`Collection "${COLLECTION_NAME}" created with int8 quantization. Upserting ${sourceDict.length} findings...`);
+    logger.info(`Collection "${COLLECTION_NAME}" ready. Seeding ${sourceDict.length} findings in batches...`);
 
-    for (const rec of sourceDict) {
-      // Create semantic vector based on preferred term + synonyms
-      const textToEmbed = `${rec.term}. Synonyms: ${rec.synonyms.join(', ')}`;
-      const vector = await generateEmbedding(textToEmbed);
+    const BATCH_SIZE = 128;
+    let upserted = 0;
+    let failed = 0;
+    const startTime = Date.now();
 
-      const upsertRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
-        method: 'PUT',
-        headers: getHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          points: [
-            {
-              id: `00000000-0000-0000-0000-${rec.code.padStart(12, '0')}`, // Format as standard UUID with dashes
-              vector,
-              payload: {
-                code: rec.code,
-                term: rec.term,
-                synonyms: rec.synonyms,
-                semantic_tag: rec.semantic_tag
-              }
-            }
-          ]
-        })
-      });
+    for (let i = 0; i < sourceDict.length; i += BATCH_SIZE) {
+      const batch = sourceDict.slice(i, i + BATCH_SIZE);
 
-      if (!upsertRes.ok) {
-        logger.error({ code: rec.code }, 'Failed to upsert SNOMED point');
+      try {
+        const textsToEmbed = batch.map(rec => `${rec.term}. Synonyms: ${rec.synonyms.join(', ')}`);
+        const vectors = await generateOllamaBatchEmbeddings(textsToEmbed);
+
+        const points = batch.map((rec, batchIdx) => ({
+          id: i + batchIdx,
+          vector: vectors[batchIdx],
+          payload: {
+            code: rec.code,
+            term: rec.term,
+            synonyms: rec.synonyms,
+            semantic_tag: rec.semantic_tag
+          }
+        }));
+
+        const upsertRes = await fetchWithRetry(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
+          method: 'PUT',
+          headers: getHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ points }),
+          timeoutMs: 30000
+        });
+
+        if (upsertRes.ok) {
+          upserted += points.length;
+        } else {
+          failed += points.length;
+          const errText = await upsertRes.text();
+          logger.error(`Upsert batch failed at index ${i}: ${errText}`);
+        }
+      } catch (err: any) {
+        failed += batch.length;
+        logger.error(`Error processing batch starting at ${i}: ${err.message}`);
+      }
+
+      if ((upserted + failed) % 100 < BATCH_SIZE) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+        logger.info(`Progress: ${upserted}/${sourceDict.length} (${failed} failed) — ${elapsed}s elapsed`);
       }
     }
 
-    logger.info('SNOMED Qdrant seeding completed successfully.');
+    logger.info(`SNOMED Qdrant seeding completed. ${upserted} upserted, ${failed} failed.`);
   } catch (err: any) {
     logger.error({ error: err.message }, 'Failed to seed SNOMED collection');
   }
 }
 
-// Only run if executed directly
 if (require.main === module) {
   seed();
 }

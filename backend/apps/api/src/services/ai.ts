@@ -1,17 +1,28 @@
-import OpenAI from 'openai';
 import { z } from 'zod';
 import { logger } from '../config/logger';
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+// --- Gemini API Key Rotation Setup ---
+const getGeminiApiKeys = (): string[] => {
+  const keysStr = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '';
+  return keysStr.split(',').map(k => k.trim()).filter(k => k && k !== 'your-gemini-api-key');
+};
 
-// Initialize OpenAI client for Groq or OpenAI
-const hasLLMKeys = (GROQ_API_KEY && GROQ_API_KEY !== 'your-groq-api-key') || (OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key');
+let currentKeyIndex = 0;
+const getActiveGeminiKey = (): string => {
+  const keys = getGeminiApiKeys();
+  if (keys.length === 0) return '';
+  return keys[currentKeyIndex % keys.length];
+};
 
-const openai = new OpenAI({
-  apiKey: GROQ_API_KEY && GROQ_API_KEY !== 'your-groq-api-key' ? GROQ_API_KEY : OPENAI_API_KEY,
-  baseURL: GROQ_API_KEY && GROQ_API_KEY !== 'your-groq-api-key' ? 'https://api.groq.com/openai/v1' : undefined
-});
+const rotateGeminiKey = (): string => {
+  const keys = getGeminiApiKeys();
+  if (keys.length <= 1) return getActiveGeminiKey();
+  currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+  logger.info(`Rotated to Gemini API key #${currentKeyIndex + 1} of ${keys.length}`);
+  return keys[currentKeyIndex];
+};
+
+const hasLLMKeys = getGeminiApiKeys().length > 0 && process.env.NODE_ENV !== 'test';
 
 interface GuardedAIResult<T> {
   data: T;
@@ -51,10 +62,10 @@ export function redactPII(text: string, onsetDate?: Date | string | null): strin
       return '[DATE_REDACTED]';
     }
 
-    const detectedDate = new Date(match);
     const baseDate = new Date(onsetDate);
+    const detectedDate = new Date(match);
 
-    if (isNaN(detectedDate.getTime()) || isNaN(baseDate.getTime())) {
+    if (isNaN(baseDate.getTime()) || isNaN(detectedDate.getTime())) {
       return '[DATE_REDACTED]';
     }
 
@@ -89,33 +100,78 @@ export function verifyGroundedness(quote: string, text: string): boolean {
 }
 
 /**
- * Single LLM call helper (supports Groq/OpenAI with mock fallback)
+ * Single LLM call helper (supports Gemini with mock fallback)
  */
 async function executeLLMCall(
   systemPrompt: string,
   userPrompt: string,
-  temperature: number = 0.0
+  temperature: number = 0.0,
+  retries = 5
 ): Promise<string> {
   if (!hasLLMKeys) {
-    // Generate high-quality mock responses based on prompts to make tests and offline execution succeed
     return simulateMockLLMResponse(userPrompt);
   }
 
-  const response = await openai.chat.completions.create({
-    model: GROQ_API_KEY ? 'llama3-70b-8192' : 'gpt-4-turbo-preview',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature,
-    response_format: { type: 'json_object' }
-  });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const activeKey = getActiveGeminiKey();
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${activeKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: userPrompt }]
+              }
+            ],
+            systemInstruction: {
+              parts: [{ text: systemPrompt }]
+            },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature
+            }
+          }),
+          signal: AbortSignal.timeout(20000)
+        }
+      );
 
-  return response.choices[0]?.message?.content || '{}';
+      if (!res.ok) {
+        const errText = await res.text();
+        if (res.status === 429 && attempt < retries) {
+          logger.warn(`Gemini LLM 429 Rate Limit hit. Rotating API key...`);
+          rotateGeminiKey();
+          await new Promise(r => setTimeout(r, 2000 * attempt));
+          continue;
+        }
+        throw new Error(`Gemini LLM API error ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json() as any;
+      const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!responseText) {
+        throw new Error('Invalid response structure from Gemini LLM API');
+      }
+
+      return responseText;
+    } catch (err: any) {
+      if (attempt === retries) {
+        logger.error({ error: err.message }, `Failed to execute Gemini LLM call after ${retries} attempts.`);
+        throw err;
+      }
+      logger.warn(`Gemini LLM call attempt ${attempt}/${retries} failed: ${err.message}. Retrying...`);
+      await new Promise(r => setTimeout(r, attempt * 2000));
+    }
+  }
+
+  throw new Error('Gemini LLM call failed: exceeded max retries');
 }
 
 /**
- * Calls Groq/OpenAI under strict structural isolation, schema checks, groundedness verification, and self-consistency.
+ * Calls Gemini under strict structural isolation, schema checks, groundedness verification, and self-consistency.
  */
 export async function callGuardedAI<T>(options: {
   prompt: string;

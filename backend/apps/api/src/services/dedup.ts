@@ -1,27 +1,34 @@
-import OpenAI from 'openai';
+import dotenv from 'dotenv';
+import path from 'path';
+import { InferenceClient } from '@huggingface/inference';
 import { logger } from '../config/logger';
 
-const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
-const QDRANT_API_KEY = process.env.QDRANT_API_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
+dotenv.config({ path: path.join(__dirname, '../../../../.env') });
+
+const getQdrantUrl = () => process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_URL = getQdrantUrl();
+const getQdrantApiKey = () => process.env.QDRANT_API_KEY || '';
+
+// --- HuggingFace Inference Client (for query embeddings) ---
+const HF_TOKEN = process.env.HF_TOKEN || '';
+const hfClient = HF_TOKEN ? new InferenceClient(HF_TOKEN) : null;
+
+// --- Ollama configuration (for document embeddings) ---
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+const OLLAMA_MODEL = 'bge-m3';
 
 const getHeaders = (h: Record<string, string> = {}) => {
   const headersObj = { ...h };
-  if (QDRANT_API_KEY) {
-    headersObj['api-key'] = QDRANT_API_KEY;
+  const apiKey = getQdrantApiKey();
+  if (apiKey) {
+    headersObj['api-key'] = apiKey;
   }
   return headersObj;
 };
 
-const hasEmbeddingKey = OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key';
-
-const openai = new OpenAI({
-  apiKey: hasEmbeddingKey ? OPENAI_API_KEY : 'mock-key'
-});
-
 const COLLECTION_NAME = 'cases';
-const VECTOR_SIZE = 1536; // size of text-embedding-3-small
+const VECTOR_SIZE = 1024; // BAAI/bge-m3 outputs 1024 dims
 
 // Check if Qdrant is active
 let useMockQdrant = true;
@@ -42,36 +49,154 @@ interface MockPoint {
 const mockQdrantStore: MockPoint[] = [];
 
 /**
- * Generates text embeddings using OpenAI text-embedding-3-small (1536 dims).
- * Falls back to deterministic pseudo-embeddings for testing when offline.
+ * Generates a query embedding using HuggingFace Inference API with BAAI/bge-m3.
+ * Used for search queries, deduplication checks, and real-time embedding needs.
+ * Retries on transient errors.
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
-  if (!hasEmbeddingKey) {
-    // Generate deterministic pseudo-embedding vector for offline mock testing
-    const vector = new Array(VECTOR_SIZE).fill(0);
-    const stopWords = new Set(['patient', 'experienced', 'severe', 'after', 'taking', 'intake', 'the', 'on', 'a', 'is', 'was', 'for', 'to', 'with', 'and', 'or', 'in', 'at', 'of', 'from', 'started', 'developed', 'reported', 'reaction', 'adverse', 'event', 'symptoms', 'treatment', 'were', 'given']);
-    const words = text.toLowerCase().split(/\s+/).map(w => w.replace(/[^a-z0-9]/g, '')).filter(w => w && !stopWords.has(w));
-    for (let i = 0; i < words.length; i++) {
-      const hash = words[i].split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      const idx = hash % VECTOR_SIZE;
-      vector[idx] += 1;
-    }
-    // Normalize vector
-    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0)) || 1;
-    return vector.map(v => v / magnitude);
+export async function generateEmbedding(text: string, retries = 5): Promise<number[]> {
+  if (process.env.NODE_ENV === 'test') {
+    return new Array(1024).fill(0.1);
   }
 
-  try {
-    const response = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: text
-    });
-    return response.data[0].embedding;
-  } catch (err: any) {
-    logger.error({ error: err.message }, 'Failed to generate embedding from OpenAI. Falling back to pseudo-embeddings');
-    // Generate fallback pseudo-embedding
-    return generateEmbedding(text);
+  if (!hfClient) {
+    throw new Error('HF_TOKEN is not configured in .env file. HuggingFace embeddings are required.');
   }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await hfClient.featureExtraction({
+        model: 'BAAI/bge-m3',
+        provider: 'hf-inference',
+        inputs: text
+      });
+
+      // featureExtraction returns number[] or number[][] — normalize to flat array
+      const embedding = Array.isArray(result[0]) ? (result as number[][])[0] : result as number[];
+
+      if (!embedding || embedding.length === 0) {
+        throw new Error('Empty embedding returned from HuggingFace');
+      }
+
+      return embedding;
+    } catch (err: any) {
+      if (attempt === retries) {
+        logger.error({ error: err.message }, `Failed to generate HuggingFace embedding after ${retries} attempts.`);
+        throw new Error(`HuggingFace embedding generation failed: ${err.message}`);
+      }
+      logger.warn(`HuggingFace embedding attempt ${attempt}/${retries} failed: ${err.message}. Retrying...`);
+      await new Promise(r => setTimeout(r, attempt * 1500));
+    }
+  }
+
+  throw new Error('HuggingFace embedding generation failed: exceeded max retries');
+}
+
+/**
+ * Generates a document embedding using local Ollama with bge-m3 model.
+ * Used for SNOMED seeding and document indexing (runs locally, no rate limits).
+ */
+export async function generateOllamaEmbedding(text: string, retries = 3): Promise<number[]> {
+  if (process.env.NODE_ENV === 'test') {
+    return new Array(1024).fill(0.1);
+  }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${OLLAMA_URL}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: OLLAMA_MODEL,
+          input: text
+        }),
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Ollama embedding API error ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json() as any;
+      if (!data?.embeddings?.[0]) {
+        throw new Error('Invalid response structure from Ollama embedding API');
+      }
+      return data.embeddings[0];
+    } catch (err: any) {
+      if (attempt === retries) {
+        logger.error({ error: err.message }, `Failed to generate Ollama embedding after ${retries} attempts.`);
+        throw new Error(`Ollama embedding generation failed: ${err.message}`);
+      }
+      logger.warn(`Ollama embedding attempt ${attempt}/${retries} failed: ${err.message}. Retrying...`);
+      await new Promise(r => setTimeout(r, attempt * 2000));
+    }
+  }
+
+  throw new Error('Ollama embedding generation failed: exceeded max retries');
+}
+
+/**
+ * Generates batch document embeddings using local Ollama with bge-m3 model.
+ * Ollama supports multiple inputs in a single request via the "input" array field.
+ * Used for SNOMED seeding (no rate limits, runs locally).
+ */
+export async function generateOllamaBatchEmbeddings(texts: string[], retries = 3): Promise<number[][]> {
+  if (process.env.NODE_ENV === 'test') {
+    return texts.map(() => new Array(1024).fill(0.1));
+  }
+
+  if (texts.length === 0) return [];
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${OLLAMA_URL}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: OLLAMA_MODEL,
+          input: texts
+        }),
+        signal: AbortSignal.timeout(60000)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Ollama batch embedding API error ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json() as any;
+      if (!data?.embeddings || !Array.isArray(data.embeddings)) {
+        throw new Error('Invalid response structure from Ollama batch embedding API');
+      }
+
+      return data.embeddings;
+    } catch (err: any) {
+      if (attempt === retries) {
+        logger.error({ error: err.message }, `Failed to generate Ollama batch embeddings after ${retries} attempts.`);
+        throw new Error(`Ollama batch embedding generation failed: ${err.message}`);
+      }
+      logger.warn(`Ollama batch embedding attempt ${attempt}/${retries} failed: ${err.message}. Retrying...`);
+      await new Promise(r => setTimeout(r, attempt * 3000));
+    }
+  }
+
+  throw new Error('Ollama batch embedding generation failed: exceeded max retries');
+}
+
+/**
+ * Generates batch query embeddings using HuggingFace Inference API.
+ * Processes texts sequentially through the HF featureExtraction endpoint.
+ * Used for batch query operations (not for SNOMED seeding — use Ollama for that).
+ */
+export async function generateBatchEmbeddings(texts: string[], retries = 5): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const results: number[][] = [];
+  for (const text of texts) {
+    const embedding = await generateEmbedding(text, retries);
+    results.push(embedding);
+  }
+  return results;
 }
 
 /**

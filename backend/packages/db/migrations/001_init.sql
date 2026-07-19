@@ -4,12 +4,25 @@
 create extension if not exists "uuid-ossp";
 
 -- Ensure auth schema and auth.users dummy table exist for standalone local PostgreSQL run
-create schema if not exists auth;
-create table if not exists auth.users (
-  id uuid primary key default uuid_generate_v4(),
-  email text unique,
-  created_at timestamptz default now()
-);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
+        CREATE SCHEMA auth;
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'auth' AND tablename = 'users') THEN
+        CREATE TABLE auth.users (
+            id uuid primary key default uuid_generate_v4(),
+            email text unique,
+            created_at timestamptz default now()
+        );
+    END IF;
+END
+$$;
 
 -- Core tables
 create table tenants (

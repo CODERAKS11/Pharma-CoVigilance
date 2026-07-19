@@ -16,14 +16,27 @@ const getHeaders = (h: Record<string, string> = {}) => {
 
 let activeDict: SnomedRecord[] = SNOMED_DICTIONARY;
 try {
-  const rf2Module = require('../../../../packages/db/scripts/snomed-parsed-dictionary-dictionary');
-  if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
-    const parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+  const fs = require('fs');
+  const path = require('path');
+  const jsonPath = path.join(__dirname, '../../../../packages/db/scripts/snomed-parsed-dictionary.json');
+  if (fs.existsSync(jsonPath)) {
+    const fileContent = fs.readFileSync(jsonPath, 'utf-8');
+    const parsed = JSON.parse(fileContent) as SnomedRecord[];
     const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
     activeDict = [
       ...SNOMED_DICTIONARY,
       ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
     ];
+  } else {
+    const rf2Module = require('../../../../packages/db/scripts/snomed-parsed-dictionary-dictionary');
+    if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
+      const parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+      const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
+      activeDict = [
+        ...SNOMED_DICTIONARY,
+        ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
+      ];
+    }
   }
 } catch {
   // Fall back to SNOMED_DICTIONARY
@@ -46,7 +59,7 @@ export async function initSnomed() {
   try {
     const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
       headers: getHeaders(),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(15000)
     });
     if (res.ok) {
       useMockSnomed = false;
@@ -55,8 +68,8 @@ export async function initSnomed() {
       logger.warn('SNOMED Qdrant collection not initialized. Using in-memory lexical matching fallback.');
       useMockSnomed = true;
     }
-  } catch {
-    logger.warn('Qdrant service offline. SNOMED matching engine running in mock/lexical mode.');
+  } catch (err: any) {
+    logger.warn({ error: err.message }, 'Qdrant service offline. SNOMED matching engine running in mock/lexical mode.');
     useMockSnomed = true;
   }
 }

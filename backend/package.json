@@ -11,5 +11,8 @@
     "build:api": "npm run build --workspace=apps/api",
     "seed": "npm run seed --workspace=packages/db",
     "test": "npm test --workspace=apps/api"
+  },
+  "dependencies": {
+    "@huggingface/inference": "^4.13.23"
   }
 }
