@@ -13,6 +13,7 @@ export interface SnomedRecord {
 }
 
 export const SNOMED_DICTIONARY: SnomedRecord[] = [
+  // --- Original 20 entries ---
   { code: '73442001', term: 'Stevens-Johnson syndrome', synonyms: ['sjs', 'blistering skin rash', 'toxic skin necrosis'], semantic_tag: 'disorder' },
   { code: '80449002', term: 'Nausea', synonyms: ['feeling sick', 'nauseous', 'queasy'], semantic_tag: 'finding' },
   { code: '422400008', term: 'Vomiting', synonyms: ['emesis', 'throwing up', 'vomited'], semantic_tag: 'finding' },
@@ -32,7 +33,28 @@ export const SNOMED_DICTIONARY: SnomedRecord[] = [
   { code: '29857009', term: 'Chest pain', synonyms: ['chest discomfort', 'sternal pain', 'tightness in chest'], semantic_tag: 'finding' },
   { code: '426000000', term: 'Renal impairment', synonyms: ['kidney damage', 'renal failure', 'kidney insufficiency'], semantic_tag: 'disorder' },
   { code: '418363000', term: 'Itching', synonyms: ['pruritus', 'itchy skin'], semantic_tag: 'finding' },
-  { code: '386661006', term: 'Fever', synonyms: ['pyrexia', 'high temperature', 'febrile'], semantic_tag: 'finding' }
+  { code: '386661006', term: 'Fever', synonyms: ['pyrexia', 'high temperature', 'febrile'], semantic_tag: 'finding' },
+  // --- Expanded entries: common pharmacovigilance ADRs ---
+  { code: '62315008', term: 'Diarrhoea', synonyms: ['diarrhea', 'loose stools', 'watery stool', 'frequent bowel movements'], semantic_tag: 'finding' },
+  { code: '404640003', term: 'Dizziness', synonyms: ['vertigo', 'lightheaded', 'unsteady', 'giddiness'], semantic_tag: 'finding' },
+  { code: '84229001', term: 'Fatigue', synonyms: ['tiredness', 'lethargy', 'exhaustion', 'malaise'], semantic_tag: 'finding' },
+  { code: '193462001', term: 'Insomnia', synonyms: ['sleeplessness', 'difficulty sleeping', 'sleep disturbance', 'unable to sleep'], semantic_tag: 'finding' },
+  { code: '56018004', term: 'Alopecia', synonyms: ['hair loss', 'baldness', 'thinning hair', 'hair falling out'], semantic_tag: 'finding' },
+  { code: '302215000', term: 'Thrombocytopenia', synonyms: ['low platelet count', 'platelet deficiency', 'reduced platelets'], semantic_tag: 'disorder' },
+  { code: '84757009', term: 'Epileptic seizure', synonyms: ['seizure', 'convulsion', 'fit', 'epileptic fit'], semantic_tag: 'disorder' },
+  { code: '23502006', term: 'QT prolongation', synonyms: ['long qt syndrome', 'prolonged qt interval', 'cardiac arrhythmia risk'], semantic_tag: 'disorder' },
+  { code: '35489007', term: 'Depression', synonyms: ['depressive disorder', 'depressed mood', 'low mood', 'sadness'], semantic_tag: 'disorder' },
+  { code: '267038008', term: 'Edema', synonyms: ['oedema', 'swelling', 'fluid retention', 'peripheral edema'], semantic_tag: 'finding' },
+  { code: '74474003', term: 'Gastrointestinal disorder', synonyms: ['gi upset', 'abdominal pain', 'stomach cramps', 'dyspepsia'], semantic_tag: 'disorder' },
+  { code: '281647001', term: 'Adverse drug reaction', synonyms: ['adr', 'drug side effect', 'medication reaction', 'drug hypersensitivity'], semantic_tag: 'event' },
+  { code: '297942002', term: 'Drug-induced liver injury', synonyms: ['dili', 'drug hepatitis', 'medication liver toxicity', 'hepatic injury'], semantic_tag: 'disorder' },
+  { code: '49601007', term: 'Cardiovascular disorder', synonyms: ['heart disorder', 'cardiac event', 'cardiovascular event'], semantic_tag: 'disorder' },
+  { code: '267036007', term: 'Dyspepsia', synonyms: ['indigestion', 'upset stomach', 'heartburn', 'acid reflux'], semantic_tag: 'finding' },
+  { code: '76067001', term: 'Sneezing', synonyms: ['sternutation', 'nasal irritation'], semantic_tag: 'finding' },
+  { code: '40917007', term: 'Clouded consciousness', synonyms: ['confusion', 'disorientation', 'altered mental status', 'brain fog'], semantic_tag: 'finding' },
+  { code: '271807003', term: 'Eruption', synonyms: ['skin eruption', 'drug eruption', 'maculopapular rash', 'exanthem'], semantic_tag: 'finding' },
+  { code: '91175000', term: 'Seizure', synonyms: ['convulsions', 'tonic-clonic seizure', 'grand mal', 'epileptic episode'], semantic_tag: 'disorder' },
+  { code: '419284004', term: 'Altered mental status', synonyms: ['mental confusion', 'delirium', 'cognitive impairment', 'disoriented'], semantic_tag: 'finding' },
 ];
 
 async function seed() {
