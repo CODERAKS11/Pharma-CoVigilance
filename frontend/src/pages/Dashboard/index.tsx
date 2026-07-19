@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Activity, Clock, Copy, GitCompare, Pill } from 'lucide-react';
 import { StatCard } from '../../components/ui/StatCard';
 import { mockDashboardStats } from '../../api/mockData';
+import { API_BASE_URL } from '../../config';
 
 const SEVERITY_COLORS: Record<string, string> = {
   Definite: '#8C2F2A',
@@ -20,7 +21,7 @@ export default function DashboardPage() {
     async function loadStats() {
       const token = localStorage.getItem('pharmasafe_token');
       try {
-        const response = await fetch('http://localhost:4000/dashboard/stats', {
+        const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

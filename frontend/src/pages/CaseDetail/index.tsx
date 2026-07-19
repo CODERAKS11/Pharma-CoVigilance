@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { SourceTag } from '../../components/ui/SourceTag';
 import { formatDate } from '../../lib/formatters';
 import type { CaseRecord } from '../../api/types';
+import { API_BASE_URL } from '../../config';
 
 interface CaseDetailProps {
   caseData: CaseRecord;
@@ -23,7 +24,7 @@ export default function CaseDetail({ caseData, onClose }: CaseDetailProps) {
     if (action === 'confirm' || action === 'override') {
       const token = localStorage.getItem('pharmasafe_token');
       try {
-        await fetch(`http://localhost:4000/cases/${caseData.id}/review/confirm`, {
+        await fetch(`${API_BASE_URL}/cases/${caseData.id}/review/confirm`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

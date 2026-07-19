@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { AuditTimeline } from '../../components/domain/AuditTimeline';
 import { mockSystemAudit } from '../../api/mockData';
 import type { AuditEntry } from '../../api/types';
+import { API_BASE_URL } from '../../config';
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditEntry[]>(mockSystemAudit);
@@ -15,7 +16,7 @@ export default function AuditLogPage() {
     async function loadAuditLogs() {
       const token = localStorage.getItem('pharmasafe_token');
       try {
-        const response = await fetch('http://localhost:4000/cases/audit', {
+        const response = await fetch(`${API_BASE_URL}/cases/audit`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

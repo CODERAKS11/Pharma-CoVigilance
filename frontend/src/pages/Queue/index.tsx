@@ -8,6 +8,7 @@ import { mockCases } from '../../api/mockData';
 import { formatDate, formatTimeAgo } from '../../lib/formatters';
 import type { CaseRecord } from '../../api/types';
 import CaseDetail from '../CaseDetail';
+import { API_BASE_URL } from '../../config';
 
 export default function QueuePage() {
   const [cases, setCases] = useState<CaseRecord[]>(mockCases);
@@ -18,7 +19,7 @@ export default function QueuePage() {
     async function loadCases() {
       const token = localStorage.getItem('pharmasafe_token');
       try {
-        const response = await fetch('http://localhost:4000/cases', {
+        const response = await fetch(`${API_BASE_URL}/cases`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

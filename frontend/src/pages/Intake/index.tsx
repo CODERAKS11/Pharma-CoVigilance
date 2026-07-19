@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Send, CheckCircle } from 'lucide-react';
 import { intakeSchema, type IntakeFormData } from '../../lib/schemas';
 import { ConsentNotice } from '../../components/domain/ConsentNotice';
+import { API_BASE_URL } from '../../config';
 
 export default function IntakePage() {
   const [submitted, setSubmitted] = useState<string | null>(null);
@@ -27,7 +28,7 @@ export default function IntakePage() {
   const onSubmit = async (data: IntakeFormData) => {
     const token = localStorage.getItem('pharmasafe_token');
     try {
-      const response = await fetch('http://localhost:4000/cases', {
+      const response = await fetch(`${API_BASE_URL}/cases`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

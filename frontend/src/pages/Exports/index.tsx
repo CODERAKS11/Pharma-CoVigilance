@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { mockExports } from '../../api/mockData';
 import { formatDate } from '../../lib/formatters';
 import type { ExportRecord } from '../../api/types';
+import { API_BASE_URL } from '../../config';
 
 export default function ExportsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -34,7 +35,7 @@ export default function ExportsPage() {
     for (const caseId of idsToExport) {
       try {
         const endpointType = format.toLowerCase().includes('e2b') ? 'e2b' : 'pvpi';
-        const response = await fetch(`http://localhost:4000/cases/${caseId}/export/${endpointType}`, {
+        const response = await fetch(`${API_BASE_URL}/cases/${caseId}/export/${endpointType}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
