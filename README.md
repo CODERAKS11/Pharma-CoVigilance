@@ -1,12 +1,18 @@
 # 🛡️ PharmaSafe — Advanced Pharmacovigilence Case Management & AI Pipeline
 
-PharmaSafe is a state-of-the-art Case Safety Report (ICSR) management system designed for clinical pharmacovigilance teams. It features a secure, multi-tenant React dashboard, an Express backend, and a robust **five-stage AI processing pipeline** leveraging local/cloud embedding models and Google Gemini LLMs for case triage, semantic deduplication, and automated medical coding.
+[![React](https://img.shields.io/badge/React-2025-blue?style=for-the-badge&logo=react)](https://react.dev)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-green?style=for-the-badge&logo=node.js)](https://nodejs.org)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red?style=for-the-badge)](https://qdrant.tech)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-teal?style=for-the-badge&logo=supabase)](https://supabase.com)
+[![Gemini](https://img.shields.io/badge/Google-Gemini%203.5-orange?style=for-the-badge&logo=google)](https://ai.google.dev)
+
+PharmaSafe is a secure, multi-tenant enterprise Case Safety Report (ICSR) management system designed for clinical pharmacovigilance teams. It features a responsive dashboard, a BullMQ background processing queue, a Qdrant Cloud Vector Database, a Supabase PostgreSQL instance, and a **5-stage Guarded AI pipeline** for case validity, PII scrubbing, duplicate check, causality evaluation, and SNOMED CT coding.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ System Architecture
 
-PharmaSafe is structured as a monorepo containing a modern **React Frontend** and a multi-workspace **Express Backend**.
+PharmaSafe is built as a workspace-based monorepo separating React client code, Express API routes, background workers, and migration databases.
 
 ```mermaid
 graph TB
@@ -52,37 +58,79 @@ graph TB
 
 ---
 
-## ⚡ The Guarded AI Pipeline (5-Stage Validation)
+## 🚀 Core Features
 
-Every submitted adverse drug reaction (ADR) narrative undergoes automated processing:
+### 💻 Enterprise Case Dashboard
+- **Glassmorphism UI**: Beautiful, dark-themed responsive dashboard utilizing curated color palettes, smooth hover micro-animations, and Inter/IBM Plex font family typography.
+- **Unified Analytics**: Charts tracking cases by severity, status distribution, and most common suspect drugs using **Recharts**.
+- **Case Audit Trail**: Full chronological transparency with audit tables tracking case status overrides, reviews, and edits.
 
-1. **Validity Check (Zone 2)**: Standard checks verify if the case contains a patient, a suspect drug, and a description.
-2. **PII Redaction & Temporal Offsets**: Strips emails, phone numbers, and names. Converts exact calendar dates into relative onset offsets (e.g., `"day 2 post-dose"`) for absolute patient privacy.
-3. **Semantic Deduplication (Zone 3)**: Generates a query vector via HuggingFace's BAAI/bge-m3 API and searches Qdrant Cloud. Flags near-duplicate cases of the same drug within the tenant with a similarity threshold of `> 0.85`.
-4. **Causality Assessment (Zone 5)**: Tallies a clinical Naranjo score (from -4 to +13) and assigns a causality probability category (Definite, Probable, Possible, Doubtful).
-5. **Medical Coding (Zone 5B)**: Performs a hybrid search over **93,888 SNOMED CT findings** in Qdrant Cloud, merging semantic vector similarity (60% weight) and lexical matching (40% weight) to return coding suggestions.
-6. **Clinical Narrative Generation (Zone 6)**: Generates a concise medical summary paragraph grounded strictly in the source narrative, prefixed with `"AI draft, unreviewed: "`.
+### ⚡ The Guarded AI Pipeline (5-Stage Validation)
+Every submitted adverse drug reaction (ADR) narrative undergoes automated validation:
+- **Stage 1: Validity Check (Zone 2)**: Automatically parses and validates that a patient, suspect drug, and narrative description are present.
+- **Stage 2: PII Redactor & Date Offsetting**: Scrubs names, emails, and phone numbers. Replaces exact calendar dates with relative days relative to treatment initiation (e.g., `day 3 post-onset`) to guarantee patient privacy.
+- **Stage 3: Semantic Deduplication (Zone 3)**: Converts narrative text into 1024-dimensional query vectors via HuggingFace's BAAI/bge-m3 model. Compares them with existing cases in Qdrant Cloud. Matches with similarity score `> 0.85` are flagged as duplicates.
+- **Stage 4: Causality Assessment (Zone 5)**: Scores ADRs using the clinical **Naranjo Probability Algorithm** (-4 to +13), classifying them as Definite, Probable, Possible, or Doubtful.
+- **Stage 5: SNOMED CT Hybrid Coding (Zone 5B)**: Performs a hybrid search against **93,888 SNOMED CT findings** in Qdrant, merging semantic cosine vector matching (60%) and lexical overlap (40%) to code the exact reactions.
+- **Stage 6: Clinical Narrative Generator (Zone 6)**: Generates a brief clinical safety report grounded strictly in the source text, prefixed with `AI draft, unreviewed: `.
 
 ---
 
-## 🛠️ Technology Stack
+## 🗄️ Database Schemas (Supabase Postgres)
 
-| Component | Technology | Description |
-|---|---|---|
-| **Frontend** | React, Vite, TanStack Query, Tailwind CSS, Recharts, Lucide | Responsive case listing, structured intake form, and data visualization. |
-| **Backend** | Node.js, Express, BullMQ (Redis), pg | Monolith backend orchestrating the API and queue system. |
-| **LLM Engine** | Google Gemini API (`gemini-flash-latest`) | High-quality causality evaluation and clinical summaries. |
-| **Embeddings** | HuggingFace Inference API (`BAAI/bge-m3`) | 1024-dimensional query embeddings for real-time duplicates check and search. |
-| **Local Seeding** | Local Ollama (`bge-m3` model) | Batch seeds 93,888 records locally with zero network costs or quota restrictions. |
-| **Relational DB** | Supabase (PostgreSQL 17.6) | Multi-tenant schema with structured patient, audit trail, and user tables. |
-| **Vector DB** | Qdrant Cloud | High-speed semantic similarity matching using Cosine distance. |
+The Postgres instance manages tenants, authentication metadata, case records, and audit events:
+
+### 1. `tenants`
+- `id` (uuid, PK): Unique tenant organization ID.
+- `name` (text): Tenant name.
+- `created_at` (timestamptz): Creation timestamp.
+
+### 2. `app_users`
+- `id` (uuid, PK): References auth user.
+- `tenant_id` (uuid, FK): Association to tenant.
+- `role` (text): Role constraint (`reporter`, `reviewer`, `admin`).
+- `full_name` (text): Full name.
+
+### 3. `cases`
+- `id` (uuid, PK): Case identifier.
+- `tenant_id` (uuid, FK): Association to tenant.
+- `patient_id` (uuid, FK): Patient demographics association.
+- `drug_id` (uuid, FK): Suspect drug catalog association.
+- `reporter_type` (text): Reporter type (`healthcare_professional`, `patient`, `caregiver`).
+- `dosage` (text): Suspect drug dosage.
+- `onset_date` (date): Reaction onset date.
+- `narrative` (text): Raw case narrative.
+- `hospitalization` / `life_threatening` / `disability` (boolean): Seriousness metrics.
+- `status` (text): Workflow state (`intake`, `processing`, `triaged`, `reviewed`, `exported`).
+- `priority` (text): Severity priority (`low`, `medium`, `high`, `critical`).
+- `naranjo_score` (int): Calculated Naranjo causality score.
+- `naranjo_category` (text): Causality category.
+- `snomed_candidates` (jsonb): Array of coded SNOMED CT candidates.
+
+---
+
+## 🔌 API Endpoints Reference
+
+| Method | Endpoint | Authorization | Description |
+|---|---|---|---|
+| **POST** | `/auth/session` | Public | Expose local session token exchange for mocks. |
+| **GET** | `/auth/me` | User Token | Returns the current authenticated user's profile and scope. |
+| **GET** | `/cases` | Reviewer / Admin | List all cases belonging to the user's tenant organization. |
+| **POST** | `/cases` | Reporter / Admin | Submit a new adverse event report (triggers pipeline). |
+| **GET** | `/cases/:id` | Tenant Owner | Fetch details for a specific adverse event report. |
+| **PATCH** | `/cases/:id/status` | Admin | Manually override the workflow status of a case. |
+| **POST** | `/cases/:id/review/confirm` | Reviewer | Confirm case coding/causality, locking values for export. |
+| **GET** | `/cases/:id/export/e2b` | Reviewer | Export case details as a compliant E2B XML document. |
+| **GET** | `/cases/:id/export/pvpi` | Reviewer | Export case details as a PvPI XML document. |
+| **GET** | `/cases/audit` | Reviewer / Admin | List system-wide audit events (history tracking). |
+| **GET** | `/dashboard/stats` | Reviewer / Admin | Fetch stats, category scores, and top suspect drug metrics. |
 
 ---
 
 ## 🚀 Setup & Installation
 
 ### Prerequisites
-1. Install [Node.js](https://nodejs.org/) (v20+ recommended).
+1. Install [Node.js](https://nodejs.org/) (v20+).
 2. Install [Ollama](https://ollama.com/) locally and pull the BGE-M3 model:
    ```bash
    ollama pull bge-m3
@@ -142,9 +190,7 @@ npm run dev:frontend
 ---
 
 ## 🧪 Running Tests
-
 The test suite runs automatically in offline-mock mode to guarantee speed and zero key quota usage.
-
 ```bash
 npm test --workspace=backend
 ```
