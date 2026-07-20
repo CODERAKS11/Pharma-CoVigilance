@@ -41,8 +41,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Normalize URL prefix for Vercel serverless rewrites
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.url.startsWith('/api/index')) {
+    req.url = req.url.replace(/^\/api\/index/, '') || '/';
+  } else if (req.url.startsWith('/api/')) {
+    req.url = req.url.replace(/^\/api/, '') || '/';
+  }
+  next();
+});
+
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get(['/health', '/api/health'], (req: Request, res: Response) => {
   return res.json({ status: 'ok', timestamp: new Date() });
 });
 

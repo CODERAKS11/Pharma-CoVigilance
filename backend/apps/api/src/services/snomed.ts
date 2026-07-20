@@ -43,32 +43,39 @@ const getHeaders = (h: Record<string, string> = {}) => {
   return headersObj;
 };
 
-let activeDict: SnomedRecord[] = SNOMED_DICTIONARY;
-try {
-  const fs = require('fs');
-  const path = require('path');
-  const jsonPath = path.join(__dirname, '../../../../packages/db/scripts/snomed-parsed-dictionary.json');
-  if (fs.existsSync(jsonPath)) {
-    const fileContent = fs.readFileSync(jsonPath, 'utf-8');
-    const parsed = JSON.parse(fileContent) as SnomedRecord[];
-    const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
-    activeDict = [
-      ...SNOMED_DICTIONARY,
-      ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
-    ];
-  } else {
-    const rf2Module = require('../../../../packages/db/scripts/snomed-parsed-dictionary-dictionary');
-    if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
-      const parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+let activeDict: SnomedRecord[] | null = null;
+
+function getActiveDict(): SnomedRecord[] {
+  if (activeDict) return activeDict;
+  
+  activeDict = SNOMED_DICTIONARY;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const jsonPath = path.join(__dirname, '../../../../packages/db/scripts/snomed-parsed-dictionary.json');
+    if (fs.existsSync(jsonPath)) {
+      const fileContent = fs.readFileSync(jsonPath, 'utf-8');
+      const parsed = JSON.parse(fileContent) as SnomedRecord[];
       const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
       activeDict = [
         ...SNOMED_DICTIONARY,
         ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
       ];
+    } else {
+      const rf2Module = require('../../../../packages/db/scripts/snomed-parsed-dictionary-dictionary');
+      if (rf2Module && rf2Module.SNOMED_RF2_DICTIONARY) {
+        const parsed = rf2Module.SNOMED_RF2_DICTIONARY as SnomedRecord[];
+        const existingCodes = new Set(SNOMED_DICTIONARY.map((r: SnomedRecord) => r.code));
+        activeDict = [
+          ...SNOMED_DICTIONARY,
+          ...parsed.filter((r: SnomedRecord) => !existingCodes.has(r.code))
+        ];
+      }
     }
+  } catch {
+    activeDict = SNOMED_DICTIONARY;
   }
-} catch {
-  // Fall back to SNOMED_DICTIONARY
+  return activeDict;
 }
 
 let useMockSnomed = true;
@@ -145,7 +152,7 @@ export async function searchSnomed(queryText: string): Promise<SnomedCandidate[]
 
   if (useMockSnomed) {
     // Pure lexical matching against in-memory dictionary
-    for (const record of activeDict) {
+    for (const record of getActiveDict()) {
       const lexScore = calculateLexicalScore(queryText, record);
       if (lexScore > 0.1) {
         candidates.push({
@@ -180,7 +187,7 @@ export async function searchSnomed(queryText: string): Promise<SnomedCandidate[]
           const vectorScore = match.score || 0.0; // Cosine similarity (0-1 approx range)
           
           // Combine with lexical score
-          const record = activeDict.find((r: SnomedRecord) => r.code === payload.code);
+          const record = getActiveDict().find((r: SnomedRecord) => r.code === payload.code);
           const lexScore = record ? calculateLexicalScore(queryText, record) : 0.0;
 
           // Hybrid score tally

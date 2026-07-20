@@ -1,14 +1,25 @@
 const getApiBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_URL;
+  
+  // Robust check for local development based on browser's actual address bar URL
+  const isLocalHost = 
+    typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1' || 
+      window.location.hostname.startsWith('192.168.')
+    );
+
   if (envUrl && envUrl.trim() !== '') {
     const trimmed = envUrl.trim();
-    // If in production and VITE_API_URL accidentally points to localhost/127.0.0.1, fall back to relative URL
-    if (import.meta.env.PROD && (trimmed.includes('localhost') || trimmed.includes('127.0.0.1'))) {
+    // If running in a deployed environment (not localhost), ignore localhost-based API URLs
+    if (!isLocalHost && (trimmed.includes('localhost') || trimmed.includes('127.0.0.1'))) {
       return '';
     }
     return trimmed;
   }
-  return import.meta.env.PROD ? '' : 'http://localhost:4000';
+
+  // Fallback: If on localhost, hit port 4000. Otherwise, use relative URLs (same host).
+  return isLocalHost ? 'http://localhost:4000' : '';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

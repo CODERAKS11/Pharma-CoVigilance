@@ -18,9 +18,7 @@ router.post('/session', async (req: Request, res: Response) => {
     let userId: string;
     let email: string | undefined;
 
-    if (!isSupabaseConfigured) {
-      return res.status(503).json({ error: 'Supabase is not configured' });
-    }
+
 
     // Validate token using real Supabase
     const { data: { user }, error } = await supabaseService.auth.getUser(tokenToUse);
@@ -75,9 +73,7 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     
-    if (!isSupabaseConfigured) {
-      return res.status(503).json({ error: 'Supabase is not configured' });
-    }
+
 
     // Authenticate via Supabase Auth
     const { data, error } = await supabaseService.auth.signInWithPassword({

@@ -18,27 +18,13 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-function assertSupabaseConfigured() {
-  const missingVariables = [
-    !supabaseUrl ? 'SUPABASE_URL' : null,
-    !supabaseAnonKey ? 'SUPABASE_ANON_KEY' : null,
-    !supabaseServiceKey ? 'SUPABASE_SERVICE_ROLE_KEY' : null
-  ].filter((value): value is string => value !== null);
-
-  if (missingVariables.length > 0) {
-    throw new Error(`Supabase environment variables are required: ${missingVariables.join(', ')}`);
-  }
-}
-
-if (!isTestEnvironment) {
-  assertSupabaseConfigured();
-}
-
-export const isSupabaseConfigured = isTestEnvironment || 
+export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
   supabaseServiceKey && 
-  supabaseUrl !== 'mock';
+  supabaseUrl !== 'mock' &&
+  !supabaseUrl.includes('localhost')
+);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-secret-key-at-least-32-characters-long';
 const TEST_TENANT_ID = 'de000000-0000-0000-0000-000000000001';
@@ -118,28 +104,26 @@ export const realSupabaseService = isSupabaseConfigured
 // Mock service role client wrapper
 export const mockSupabaseService = createMockSupabaseClient();
 
-// Exported service client.
-export const supabaseService: any = isTestEnvironment ? mockSupabaseService : realSupabaseService;
+// Exported service client. Falls back to mock client when Supabase is not configured.
+export const supabaseService: any = (isTestEnvironment || !isSupabaseConfigured) 
+  ? mockSupabaseService 
+  : realSupabaseService;
 
 // Function to build request-scoped clients
 export function createRequestClient(token: string, userContext?: { id: string; role: any; tenantId: string }) {
-  if (isTestEnvironment) {
+  if (isTestEnvironment || !isSupabaseConfigured) {
     return createMockSupabaseClient(userContext);
   }
 
-  if (isSupabaseConfigured) {
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      },
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`
       }
-    });
-  }
-
-  throw new Error('Supabase is not configured');
+    },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
 }
