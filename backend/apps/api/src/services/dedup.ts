@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import { InferenceClient } from '@huggingface/inference';
 import { logger } from '../config/logger';
 
 dotenv.config({ path: path.join(__dirname, '../../../.env') });
@@ -12,7 +11,15 @@ const getQdrantApiKey = () => process.env.QDRANT_API_KEY || '';
 
 // --- HuggingFace Inference Client (for query embeddings) ---
 const HF_TOKEN = process.env.HF_TOKEN || '';
-const hfClient = HF_TOKEN ? new InferenceClient(HF_TOKEN) : null;
+let hfClient: any = null;
+if (HF_TOKEN) {
+  try {
+    const { InferenceClient } = require('@huggingface/inference');
+    hfClient = new InferenceClient(HF_TOKEN);
+  } catch (err: any) {
+    logger.warn({ error: err.message }, 'HuggingFace InferenceClient initialization fallback');
+  }
+}
 
 // --- Ollama configuration (for document embeddings) ---
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';

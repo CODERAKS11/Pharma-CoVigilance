@@ -3,40 +3,8 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
-      "source": "/auth",
+      "source": "/(.*)",
       "destination": "/api/index"
-    },
-    {
-      "source": "/auth/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/cases",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/cases/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/dashboard",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/dashboard/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/health",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/((?!api/|auth|cases|dashboard|health).*)",
-      "destination": "/index.html"
     }
   ]
 }

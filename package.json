@@ -17,6 +17,7 @@
     "seed:backend": "npm run seed --workspace=backend"
   },
   "dependencies": {
+    "@huggingface/inference": "^4.13.23",
     "@supabase/supabase-js": "^2.39.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

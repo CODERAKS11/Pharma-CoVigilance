@@ -11,6 +11,7 @@
     "eval": "ts-node src/scripts/eval-metrics.ts"
   },
   "dependencies": {
+    "@huggingface/inference": "^4.13.23",
     "@supabase/supabase-js": "^2.39.8",
     "bullmq": "^5.4.0",
     "cors": "^2.8.5",

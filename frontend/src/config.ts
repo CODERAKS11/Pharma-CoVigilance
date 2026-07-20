@@ -10,7 +10,7 @@ const getApiBaseUrl = (): string => {
     );
 
   if (envUrl && envUrl.trim() !== '') {
-    const trimmed = envUrl.trim();
+    const trimmed = envUrl.trim().replace(/\/+$/, '');
     // If running in a deployed environment (not localhost), ignore localhost-based API URLs
     if (!isLocalHost && (trimmed.includes('localhost') || trimmed.includes('127.0.0.1'))) {
       return '';

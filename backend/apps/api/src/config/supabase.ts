@@ -5,9 +5,10 @@ import path from 'path';
 import ws from 'ws';
 import { MockSupabaseQueryBuilder, mockRpc } from './mockDb';
 
-// Provide native WebSocket support for Node.js 20 runtime (Supabase client requirement)
-if (typeof globalThis.WebSocket === 'undefined') {
-  (globalThis as any).WebSocket = ws;
+// Provide native WebSocket support for Node.js runtime if required
+const WebSocketConstructor = (ws as any)?.WebSocket || (typeof ws === 'function' ? ws : null);
+if (typeof globalThis.WebSocket === 'undefined' && typeof WebSocketConstructor === 'function') {
+  (globalThis as any).WebSocket = WebSocketConstructor;
 }
 
 dotenv.config({ path: path.join(__dirname, '../../../../.env') });
