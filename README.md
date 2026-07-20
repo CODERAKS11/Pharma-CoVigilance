@@ -8,7 +8,23 @@
 
 PharmaSafe is a secure, multi-tenant enterprise Case Safety Report (ICSR) management system designed for clinical pharmacovigilance teams. It features a responsive dashboard, a BullMQ background processing queue, a Qdrant Cloud Vector Database, a Supabase PostgreSQL instance, and a **5-stage Guarded AI pipeline** for case validity, PII scrubbing, duplicate check, causality evaluation, and SNOMED CT coding.
 
+**Live deployment:** https://pharma-co-vigilance-frontend.vercel.app/
+
 ---
+
+## What PharmaSafe does
+
+PharmaSafe supports the core pharmacovigilance loop:
+
+1. Intake a suspected adverse drug reaction case.
+2. Validate that the narrative contains the minimum clinical structure.
+3. Extract the evidence needed for causality reasoning.
+4. Compare the case against prior records to flag duplicates.
+5. Score the case with the Naranjo algorithm.
+6. Suggest SNOMED CT findings for coding.
+7. Draft a review-ready narrative for the clinician or reviewer.
+8. Preserve the audit trail for every action and status  change.                                                  
+This workflow is designed to reduce manual effort while keeping the final clinical decision in human hands.                                        
 
 ## 🏗️ System Architecture
 
@@ -126,6 +142,41 @@ The Postgres instance manages tenants, authentication metadata, case records, an
 | **GET** | `/dashboard/stats` | Reviewer / Admin | Fetch stats, category scores, and top suspect drug metrics. |
 
 ---
+
+## Tech Used
+
+### Frontend
+
+- React 19
+- Vite 6
+- React Router
+- React Hook Form
+- Zod
+- Lucide React icons
+- CSS variables and custom theme styling
+
+### Backend
+
+- Node.js
+- Express
+- BullMQ
+- ioredis
+- Supabase Auth and Postgres
+- TypeScript
+
+### AI and Search
+
+- Google Gemini for guarded generation
+- Hugging Face embeddings with BAAI/bge-m3
+- Qdrant Cloud for vector search
+- SNOMED CT hybrid matching
+
+### Database and Operations
+
+- Supabase Postgres
+- Audit tables for traceability
+- Migration scripts and seeding utilities
+
 
 ## 🚀 Setup & Installation
 
