@@ -1,23 +1,14 @@
 {
   "version": 2,
-  "builds": [
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "source": "/(auth|cases|dashboard|health)(.*)",
+      "destination": "/api/index.ts"
     },
     {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "routes": [
-    { "src": "/(auth|cases|dashboard|health)(.*)", "dest": "/api/index.ts" },
-    { "src": "/assets/(.*)", "dest": "/frontend/dist/assets/$1" },
-    { "src": "/favicon.ico", "dest": "/frontend/dist/favicon.svg" },
-    { "src": "/favicon.svg", "dest": "/frontend/dist/favicon.svg" },
-    { "src": "/icons.svg", "dest": "/frontend/dist/icons.svg" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/frontend/dist/index.html" }
   ]
 }

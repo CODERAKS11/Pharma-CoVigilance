@@ -95,6 +95,11 @@
 .drift-icon-ampoule { right: 7%; top: 42%; animation: login-float-a 14s ease-in-out infinite; animation-delay: 2.4s; color: var(--cyan); }
 .drift-icon-plus { left: 5%; top: 48%; animation: login-float-b 11s ease-in-out infinite; animation-delay: 0.9s; color: var(--indigo); }
 .drift-icon-capsule { right: 22%; bottom: 6%; animation: login-float-c 16s ease-in-out infinite; animation-delay: 2.8s; color: var(--amber); }
+.drift-icon-heart { left: 35%; bottom: 18%; animation: login-float-a 16s ease-in-out infinite; animation-delay: 1.5s; color: var(--coral); }
+.drift-icon-bandage { left: 24%; top: 38%; animation: login-float-b 14s ease-in-out infinite; animation-delay: 0.8s; color: var(--amber); }
+.drift-icon-thermometer { right: 30%; top: 22%; animation: login-float-c 15s ease-in-out infinite; animation-delay: 2.1s; color: var(--cyan); }
+.drift-icon-microscope { right: 25%; bottom: 35%; animation: login-float-d 13s ease-in-out infinite; animation-delay: 0.5s; color: var(--indigo); }
+.drift-icon-clipboard { left: 48%; bottom: 6%; animation: login-bob-rotate 10s ease-in-out infinite; animation-delay: 1.0s; color: var(--indigo); }
 
 .drift-icon svg { display: block; }
 

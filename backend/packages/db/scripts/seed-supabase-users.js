@@ -84,33 +84,38 @@ async function seed() {
       let userId = u.id;
       
       if (existingAuth) {
-        console.log(`User ${u.email} already exists in auth, deleting for clean seed...`);
-        const { error: delErr } = await supabase.auth.admin.deleteUser(existingAuth.id);
-        if (delErr) throw delErr;
+        console.log(`User ${u.email} already exists in auth, updating password/metadata...`);
+        const { error: updErr } = await supabase.auth.admin.updateUserById(existingAuth.id, {
+          password: u.password,
+          email_confirm: true
+        });
+        if (updErr) {
+          console.error(`Error updating auth user ${u.email}:`, updErr.message);
+          throw updErr;
+        }
+        userId = existingAuth.id;
+        console.log(`Auth user updated: ${userId}`);
+      } else {
+        // Create user in Supabase Auth
+        const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+          id: userId,
+          email: u.email,
+          password: u.password,
+          email_confirm: true
+        });
+
+        if (createErr) {
+          console.error(`Error creating auth user ${u.email}:`, createErr.message);
+          throw createErr;
+        }
+
+        console.log(`Auth user created: ${newUser.user.id}`);
       }
-      
-      // Create user in Supabase Auth
-      const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
-        id: userId,
-        email: u.email,
-        password: u.password,
-        email_confirm: true
-      });
 
-      if (createErr) {
-        console.error(`Error creating auth user ${u.email}:`, createErr.message);
-        throw createErr;
-      }
-
-      console.log(`Auth user created: ${newUser.user.id}`);
-
-      // Delete from public.app_users if exists
-      await supabase.from('app_users').delete().eq('id', userId);
-
-      // Insert into public.app_users
+      // Upsert into public.app_users
       const { error: appUserErr } = await supabase
         .from('app_users')
-        .insert({
+        .upsert({
           id: userId,
           tenant_id: TENANT_ID,
           role: u.role,

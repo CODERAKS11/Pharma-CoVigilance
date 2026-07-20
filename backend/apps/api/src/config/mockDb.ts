@@ -238,6 +238,11 @@ export class MockSupabaseQueryBuilder {
     return this;
   }
 
+  in(field: string, values: any[]) {
+    this.filters.push(item => values.includes(item[field]));
+    return this;
+  }
+
   order(field: string, { ascending } = { ascending: true }) {
     this.orderField = field;
     this.orderAscending = ascending;

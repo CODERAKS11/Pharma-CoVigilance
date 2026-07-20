@@ -116,6 +116,60 @@ function SmallCapsuleIcon() {
   );
 }
 
+function HeartPulseIcon() {
+  return (
+    <svg width="48" height="48" viewBox="0 0 64 64" fill="none">
+      <path d="M32 50S14 34 14 22a10 10 0 0 1 18-6 10 10 0 0 1 18 6c0 12-18 28-18 28Z" fill="var(--coral)" fillOpacity=".16" stroke="var(--coral)" strokeWidth="2.4" strokeOpacity=".85" />
+      <path d="M20 22h4l4-8 4 16 4-12 2 4h6" stroke="var(--coral)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".9" />
+    </svg>
+  );
+}
+
+function BandageIcon() {
+  return (
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
+      <g transform="rotate(45 32 32)">
+        <rect x="12" y="24" width="40" height="16" rx="4" fill="var(--amber)" fillOpacity=".2" stroke="var(--amber)" strokeWidth="2" strokeOpacity=".8" />
+        <rect x="24" y="24" width="16" height="16" fill="var(--amber)" fillOpacity=".3" stroke="var(--amber)" strokeWidth="1.5" strokeOpacity=".7" strokeDasharray="2,2" />
+      </g>
+    </svg>
+  );
+}
+
+function ThermometerIcon() {
+  return (
+    <svg width="44" height="44" viewBox="0 0 64 64" fill="none">
+      <g transform="rotate(-15 32 32)">
+        <path d="M28 10h8v24a8 8 0 1 1-8 0V10Z" fill="var(--cyan)" fillOpacity=".16" stroke="var(--cyan)" strokeWidth="2.4" strokeOpacity=".85" />
+        <circle cx="32" cy="40" r="4" fill="var(--cyan)" fillOpacity=".8" />
+        <line x1="32" y1="20" x2="32" y2="36" stroke="var(--cyan)" strokeWidth="2.4" strokeLinecap="round" strokeOpacity=".8" />
+      </g>
+    </svg>
+  );
+}
+
+function MicroscopeIcon() {
+  return (
+    <svg width="50" height="50" viewBox="0 0 64 64" fill="none">
+      <path d="M20 52h24M24 42v10M40 42v10M32 20c8 0 8 16 0 16" stroke="var(--indigo)" strokeWidth="2.4" strokeLinecap="round" strokeOpacity=".8" fill="none" />
+      <path d="M38 12 26 24" stroke="var(--indigo)" strokeWidth="3" strokeLinecap="round" strokeOpacity=".9" />
+      <rect x="18" y="42" width="28" height="4" rx="1" fill="var(--indigo)" fillOpacity=".8" />
+    </svg>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
+      <rect x="18" y="16" width="28" height="36" rx="3" fill="var(--indigo)" fillOpacity=".15" stroke="var(--indigo)" strokeWidth="2" strokeOpacity=".8" />
+      <rect x="26" y="10" width="12" height="8" rx="2" fill="var(--indigo)" fillOpacity=".8" />
+      <line x1="24" y1="26" x2="40" y2="26" stroke="var(--indigo)" strokeWidth="2" strokeOpacity=".6" />
+      <line x1="24" y1="34" x2="36" y2="34" stroke="var(--indigo)" strokeWidth="2" strokeOpacity=".6" />
+      <line x1="24" y1="42" x2="40" y2="42" stroke="var(--indigo)" strokeWidth="2" strokeOpacity=".6" />
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const { login, error: authError, loading } = useAuth();
   const navigate = useNavigate();
@@ -165,6 +219,11 @@ export default function LoginPage() {
         <div className="drift-icon drift-icon-ampoule"><AmpouleIcon /></div>
         <div className="drift-icon drift-icon-plus"><PlusBadgeIcon /></div>
         <div className="drift-icon drift-icon-capsule"><SmallCapsuleIcon /></div>
+        <div className="drift-icon drift-icon-heart"><HeartPulseIcon /></div>
+        <div className="drift-icon drift-icon-bandage"><BandageIcon /></div>
+        <div className="drift-icon drift-icon-thermometer"><ThermometerIcon /></div>
+        <div className="drift-icon drift-icon-microscope"><MicroscopeIcon /></div>
+        <div className="drift-icon drift-icon-clipboard"><ClipboardIcon /></div>
 
         <div className="login-monitor">
           <div className="login-monitor-head">
